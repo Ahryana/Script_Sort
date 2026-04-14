@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Script Sort Tool</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --nav-bg:       #0f172a;
+      --nav-border:   #1e293b;
+      --bg-base:      #f1f5f9;
+      --bg-panel:     #ffffff;
+      --bg-item:      #f8fafc;
+      --bg-item-hover:#f1f5f9;
+      --bg-active:    #eff6ff;
+      --accent:       #1e40af;
+      --accent-dim:   #93c5fd;
+      --text-primary: #0f172a;
+      --text-muted:   #94a3b8;
+      --text-dim:     #64748b;
+      --border:       #e2e8f0;
+      --success:      #059669;
+      --danger:       #dc2626;
+      --warn:         #d97706;
+      --tag-bg:       #eff6ff;
+    }
+
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg-base); color: var(--text-primary); }
+
+    /* ── UPLOAD NAV ── */
+    .site-nav {
+      position: sticky; top: 0; z-index: 200;
+      background: var(--nav-bg); border-bottom: 1px solid var(--nav-border);
+    }
+    .site-nav-inner {
+      max-width: 960px; margin: 0 auto; padding: 0 28px;
+      height: 50px; display: flex; align-items: center;
+    }
+    .site-logo { font-size: 13px; font-weight: 700; color: #f8fafc; letter-spacing: 0.1em; text-transform: uppercase; }
+    .logo-accent { color: #60a5fa; }
+    .site-tagline {
+      font-size: 12px; color: rgba(255,255,255,0.32);
+      padding-left: 16px; margin-left: 16px;
+      border-left: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* ── UPLOAD SCREEN ── */
+    .site-main {
+      max-width: 960px; margin: 0 auto; padding: 36px 24px 80px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    #upload-zone {
+      width: 100%; max-width: 640px; border: 1.5px dashed var(--border); border-radius: 10px;
+      padding: 44px 24px; text-align: center; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--bg-panel); box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    #upload-zone:hover, #upload-zone.drag-over { border-color: var(--accent); background: var(--bg-active); }
+    #upload-zone .icon { font-size: 36px; margin-bottom: 10px; opacity: 0.55; }
+    #upload-zone p { font-size: 14px; color: var(--text-dim); line-height: 1.6; }
+    #upload-zone strong { color: var(--accent); }
+    #file-input { display: none; }
+
+    #status { margin-top: 16px; font-size: 13px; height: 20px; color: var(--text-muted); }
+    #status.success { color: var(--success); }
+    #status.error   { color: var(--danger); }
+
+    #rules-preload-wrap {
+      width: 100%; max-width: 640px; margin-top: 10px;
+      display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+    }
+    .preload-label {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text-muted); cursor: pointer;
+      padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px;
+      background: var(--bg-panel); transition: border-color 0.15s, color 0.15s;
+    }
+    .preload-label:hover { border-color: var(--accent-dim); color: var(--text-primary); }
+    #rules-badge {
+      display: none; align-items: center; gap: 6px; font-size: 12px; color: var(--success);
+      padding: 6px 12px; border: 1px solid var(--success); border-radius: 20px; background: var(--bg-panel);
+    }
+    #rules-badge.show { display: inline-flex; }
+    #rules-badge-clear { background: none; border: none; color: var(--success); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; opacity: 0.7; }
+    #rules-badge-clear:hover { opacity: 1; }
+
+    /* ── APP SCREEN ── */
+    #app-screen {
+      position: fixed; inset: 0; z-index: 300;
+      display: none; flex-direction: column; background: var(--bg-base);
+    }
+    #app-screen.visible { display: flex; }
+
+    /* App Header */
+    #app-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; border-bottom: 1px solid var(--nav-border);
+      background: var(--nav-bg); flex-shrink: 0; height: 50px; gap: 12px;
+    }
+    #app-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
+    .app-logo { font-size: 13px; font-weight: 700; color: #f8fafc; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
+    .app-divider { width: 1px; height: 18px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
+    #app-title { font-size: 13px; color: rgba(255,255,255,0.65); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #app-meta  { font-size: 11px; color: rgba(255,255,255,0.32); white-space: nowrap; flex-shrink: 0; }
+    #app-header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+    .hdr-btn {
+      padding: 5px 11px; background: transparent; border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 5px; color: rgba(255,255,255,0.7); font-size: 12px; cursor: pointer;
+      white-space: nowrap; transition: border-color 0.15s, color 0.15s;
+    }
+    .hdr-btn:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .hdr-btn-primary {
+      padding: 5px 12px; background: var(--accent); border: 1px solid var(--accent);
+      border-radius: 5px; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer;
+      white-space: nowrap;
+    }
+    .hdr-btn-primary:hover:not(:disabled) { background: #2d52c0; }
+    .hdr-btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* App Body */
+    #app-body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── SIDEBAR ── */
+    #sidebar {
+      width: 260px; flex-shrink: 0; border-right: 1px solid var(--border);
+      background: var(--bg-panel); display: flex; flex-direction: column; overflow: hidden;
+    }
+    #sidebar-header {
+      display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+      font-size: 11px; font-weight: 700; color: var(--text-muted);
+      letter-spacing: 0.08em; text-transform: uppercase;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    #sidebar-progress { font-weight: 600; color: var(--accent); letter-spacing: 0; }
+    #sidebar-progress.done { color: var(--success); }
+    #sidebar-list { flex: 1; overflow-y: auto; padding: 6px; }
+    #sidebar-list::-webkit-scrollbar { width: 4px; }
+    #sidebar-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .sidebar-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+      border-radius: 6px; cursor: pointer; border: 1px solid transparent; margin-bottom: 2px;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .sidebar-item:hover:not(.no-keys) { background: var(--bg-item-hover); }
+    .sidebar-item.active { background: var(--bg-active); border-color: var(--accent-dim); }
+    .sidebar-item.no-keys { opacity: 0.4; cursor: default; }
+    .sidebar-icon { font-size: 13px; width: 16px; text-align: center; flex-shrink: 0; color: var(--text-muted); }
+    .sidebar-item.configured .sidebar-icon { color: var(--success); }
+    .sidebar-item.active .sidebar-icon { color: var(--accent); }
+    .sidebar-info { flex: 1; min-width: 0; }
+    .sidebar-name { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-item.active .sidebar-name { color: var(--accent); font-weight: 600; }
+    .sidebar-meta { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+    /* ── MAIN PANEL ── */
+    #main-panel { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-width: 0; }
+    #main-panel::-webkit-scrollbar { width: 6px; }
+    #main-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    #main-empty {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: var(--text-muted); font-size: 14px; gap: 10px; padding: 60px; text-align: center;
+    }
+    #main-empty .empty-icon { font-size: 40px; opacity: 0.15; }
+
+    #main-content { display: none; flex-direction: column; }
+    #main-content.visible { display: flex; }
+
+    /* Config Area */
+    #config-area { padding: 24px; border-bottom: 1px solid var(--border); }
+    #config-area-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; gap: 12px; }
+    #config-sheet-name { font-size: 15px; font-weight: 700; }
+    #config-sheet-subtitle { font-size: 12px; color: var(--accent); margin-top: 3px; }
+    #config-actions { display: flex; gap: 8px; flex-shrink: 0; padding-top: 2px; }
+
+    /* Preview Area */
+    #preview-area { display: none; padding: 24px; border-bottom: 1px solid var(--border); }
+    #preview-area.visible { display: block; }
+    #preview-area-header { display: flex; align-items: center; margin-bottom: 12px; }
+    #preview-area-header h3 { font-size: 14px; font-weight: 600; }
+
+    #preview-table-wrap {
+      overflow-x: auto; border: 1px solid var(--border); border-radius: 8px;
+      max-height: 480px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    #preview-table { border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+    #preview-table thead tr { background: var(--bg-item); position: sticky; top: 0; z-index: 1; }
+    #preview-table th {
+      padding: 8px 12px; text-align: left; border-bottom: 2px solid var(--border);
+      border-right: 1px solid var(--border); color: var(--text-muted); font-size: 11px;
+      white-space: nowrap; font-weight: 600; position: relative; overflow: hidden; user-select: none;
+    }
+    #preview-table th:last-child { border-right: none; }
+    #preview-table th.th-sortkey { color: var(--accent); }
+    #preview-table th.th-gamekey { color: var(--text-dim); }
+    #preview-table td {
+      padding: 5px 12px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+      color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #preview-table td:last-child { border-right: none; }
+    #preview-table tr:last-child td { border-bottom: none; }
+    #preview-table tr:nth-child(even) td { background: rgba(0,0,0,0.02); }
+    #preview-table td.td-gamekey { font-family: 'Cascadia Code','Consolas',monospace; color: var(--text-primary); }
+
+    .col-resize-handle { position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; z-index: 2; }
+    .col-resize-handle:hover, .col-resize-handle.dragging { background: var(--accent); opacity: 0.6; }
+
+    .sort-key-tags { display: flex; gap: 4px; }
+    .sort-key-tag { font-size: 10px; font-family: 'Cascadia Code','Consolas',monospace; background: var(--accent-dim); color: #fff; border-radius: 3px; padding: 1px 6px; white-space: nowrap; }
+    .sort-key-tag.unknown { background: var(--bg-item); color: var(--text-muted); border: 1px solid var(--border); }
+
+    /* Log Panel */
+    #log-panel {
+      margin: 0 24px 24px; background: var(--nav-bg); border: 1px solid var(--nav-border);
+      border-radius: 8px; padding: 12px 14px;
+      font-family: 'Cascadia Code','Consolas',monospace; font-size: 12px;
+      max-height: 180px; overflow-y: auto; display: none;
+    }
+    .log-ok   { color: #4ec9b0; }
+    .log-info { color: #9cdcfe; }
+    .log-warn { color: #dcdcaa; }
+    .log-err  { color: #f48771; }
+
+    /* ── SORT LEVEL CARD ── */
+    .sort-level-card {
+      background: var(--bg-item); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px; margin-bottom: 12px;
+      transition: border-color 0.12s, box-shadow 0.12s, opacity 0.12s;
+    }
+    .sort-level-card.dragging { opacity: 0.35; }
+    .sort-level-card.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+    .sort-level-card.collapsed { padding-bottom: 12px; }
+
+    .level-header { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+    .sort-level-card.collapsed .level-header { margin-bottom: 0; }
+
+    .level-grip { color: var(--border); font-size: 16px; cursor: grab; padding: 0 2px; user-select: none; flex-shrink: 0; line-height: 1; transition: color 0.12s; }
+    .level-grip:hover { color: var(--accent-dim); }
+    .level-grip:active { cursor: grabbing; }
+    .level-collapse-btn { background: none; border: none; color: var(--text-muted); font-size: 12px; cursor: pointer; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+    .level-collapse-btn:hover { color: var(--text-primary); }
+    .level-title { font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer; flex-shrink: 0; }
+    .level-title:hover { opacity: 0.8; }
+    .level-summary { flex: 1; font-size: 11px; color: var(--text-muted); font-family: 'Cascadia Code','Consolas',monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 4px; }
+    .level-del-btn { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; padding: 3px 8px; cursor: pointer; }
+    .level-del-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+    .step-input-preview { margin-bottom: 8px; }
+    .preview-label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 5px; }
+    .sample-vals { display: flex; flex-direction: column; gap: 3px; }
+    .sample-val { font-size: 11px; font-family: 'Cascadia Code','Consolas',monospace; color: var(--text-dim); background: var(--bg-active); border-radius: 3px; padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .step-block { margin-bottom: 10px; }
+    .delim-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .step-arrow { font-size: 14px; color: var(--text-muted); }
+    .step-op-label { font-size: 12px; color: var(--text-muted); }
+    .delim-mini { width: 60px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; color: var(--text-primary); font-family: 'Cascadia Code','Consolas',monospace; outline: none; }
+    .delim-mini:focus { border-color: var(--accent); }
+    .step-remove-btn { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; padding: 3px 8px; cursor: pointer; margin-left: auto; }
+    .step-remove-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+    .token-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 5px; }
+    .token-table-wrap table { border-collapse: collapse; font-size: 11px; font-family: 'Cascadia Code','Consolas',monospace; min-width: 100%; }
+    .token-table-wrap thead tr { background: var(--bg-panel); }
+    .token-table-wrap th { padding: 7px 12px; text-align: center; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); cursor: pointer; color: var(--text-muted); font-size: 11px; white-space: nowrap; user-select: none; transition: background 0.12s, color 0.12s; }
+    .token-table-wrap th:last-child { border-right: none; }
+    .token-table-wrap th:hover { background: var(--bg-item-hover); color: var(--text-primary); }
+    .token-table-wrap th.selected { background: var(--accent-dim); color: #fff; }
+    .token-table-wrap th.th-end { border-left: 2px solid var(--border); background: rgba(30,64,175,0.04); color: var(--accent-dim); }
+    .token-table-wrap th.th-end:hover { background: var(--bg-item-hover); color: var(--text-primary); }
+    .token-table-wrap th.th-end.selected { background: var(--accent-dim); color: #fff; }
+    .token-table-wrap td { padding: 5px 12px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
+    .token-table-wrap td:last-child { border-right: none; }
+    .token-table-wrap tr:last-child td { border-bottom: none; }
+    .token-table-wrap td.selected { background: rgba(30,64,175,0.08); color: var(--text-primary); }
+    .token-table-wrap td.empty { color: var(--text-muted); opacity: 0.4; font-style: italic; }
+    .token-table-wrap td.td-end { border-left: 2px solid var(--border); }
+
+    /* Reorder */
+    .reorder-section { margin-top: 12px; }
+    .reorder-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 5px; }
+    .extracted-count { font-size: 12px; color: var(--text-dim); }
+    .reorder-toggle-btn { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; padding: 3px 10px; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+    .reorder-toggle-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .reorder-toggle-btn:disabled { opacity: 0.35; cursor: default; }
+    .reorder-too-many { font-size: 11px; color: var(--warn); opacity: 0.9; }
+    .manual-order-ta {
+      width: 100%; height: 120px; margin-top: 4px;
+      background: var(--bg-panel); border: 1px solid var(--border); border-radius: 5px;
+      padding: 8px 10px; font-size: 12px; font-family: 'Cascadia Code','Consolas',monospace;
+      color: var(--text-primary); resize: vertical; outline: none;
+    }
+    .manual-order-ta:focus { border-color: var(--accent); }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(12px);
+      background: var(--nav-bg); color: #f0f4ff;
+      font-size: 13px; font-weight: 600;
+      padding: 10px 22px; border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      white-space: nowrap; z-index: 9999;
+    }
+    #toast.toast-show {
+      opacity: 1; transform: translateX(-50%) translateY(0);
+    }
+    .mode-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px 10px; background: var(--bg-active); border-radius: 5px; }
+    .mode-label { font-size: 11px; color: var(--text-muted); margin-right: 4px; white-space: nowrap; }
+    .mode-btn { padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-muted); transition: all 0.15s; }
+    .mode-btn:hover { border-color: var(--accent-dim); color: var(--text-primary); }
+    .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .mode-alpha-note { font-size: 11px; color: var(--success); }
+    .reorder-list { list-style: none; display: flex; flex-direction: column; gap: 3px; margin-top: 6px; max-height: 260px; overflow-y: auto; padding-right: 2px; }
+    .reorder-list::-webkit-scrollbar { width: 4px; }
+    .reorder-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .reorder-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; cursor: grab; user-select: none; transition: opacity 0.12s, border-color 0.12s, background 0.12s; }
+    .reorder-item:active { cursor: grabbing; }
+    .reorder-item.dragging { opacity: 0.35; }
+    .reorder-item.drag-over { border-color: var(--accent); background: var(--bg-active); }
+    .reorder-grip { color: var(--border); font-size: 15px; line-height: 1; padding: 0 2px; pointer-events: none; }
+    .reorder-val { flex: 1; font-family: 'Cascadia Code','Consolas',monospace; font-size: 12px; color: var(--text-primary); }
+    .reorder-rank { font-size: 10px; color: var(--text-muted); min-width: 28px; text-align: right; }
+
+    .add-step-btn { margin-top: 8px; background: transparent; border: 1px dashed var(--border); border-radius: 5px; color: var(--text-muted); font-size: 12px; padding: 5px 12px; cursor: pointer; width: 100%; transition: border-color 0.15s, color 0.15s; }
+    .add-step-btn:hover { border-color: var(--accent-dim); color: var(--accent); }
+    .add-level-btn { width: 100%; background: transparent; border: 1px dashed var(--border); border-radius: 8px; color: var(--text-muted); font-size: 13px; padding: 10px; cursor: pointer; margin-top: 4px; }
+    .add-level-btn:hover { border-color: var(--accent-dim); color: var(--accent); }
+
+    .btn { padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
+    .btn-ghost:hover { border-color: var(--text-dim); color: var(--text-primary); }
+    .btn-danger-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+    .btn-danger-ghost:hover { border-color: var(--danger); color: var(--danger); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #2d52c0; }
+    .btn-primary:disabled { background: var(--accent-dim); opacity: 0.4; cursor: not-allowed; }
+
+    /* ── TOAST ── */
+    #toast-container {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      z-index: 9999; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      display: flex; align-items: center; gap: 10px;
+      background: #0f172a; color: #f8fafc;
+      padding: 12px 20px; border-radius: 10px;
+      font-size: 14px; font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      opacity: 0; transform: translateY(12px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      pointer-events: auto;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success .toast-icon { color: #34d399; }
+    .toast-icon { font-size: 16px; }
+  </style>
+</head>
+<body>
+
+  <!-- ── UPLOAD SCREEN ── -->
+  <header class="site-nav">
+    <div class="site-nav-inner">
+      <div class="site-logo">Script<span class="logo-accent">Sort</span></div>
+      <div class="site-tagline">XLSX 정렬 도구</div>
+    </div>
+  </header>
+  <main class="site-main">
+    <div id="upload-zone">
+      <div class="icon">📂</div>
+      <p><strong>클릭</strong>하거나 파일을 여기에 <strong>드래그</strong>하세요</p>
+      <p style="margin-top:6px;font-size:12px;">XLSX 파일만 지원합니다</p>
+      <input type="file" id="file-input" accept=".xlsx,.xls" />
+    </div>
+    <div id="rules-preload-wrap">
+      <label class="preload-label" id="bas-preload-label">
+        📋 BAS 파일 불러오기
+        <input type="file" id="bas-preload-input" accept=".bas,.txt" multiple style="display:none" />
+      </label>
+      <label class="preload-label" id="rules-preload-label">
+        📄 rules.json 불러오기
+        <input type="file" id="rules-preload-input" accept=".json" style="display:none" />
+      </label>
+      <span id="rules-badge">
+        <span id="rules-badge-text"></span>
+        <button id="rules-badge-clear" title="초기화">✕</button>
+      </span>
+    </div>
+    <div id="status"></div>
+  </main>
+
+  <!-- ── APP SCREEN ── -->
+  <div id="app-screen">
+    <div id="app-header">
+      <div id="app-header-left">
+        <div class="app-logo">Script<span class="logo-accent">Sort</span></div>
+        <div class="app-divider"></div>
+        <span id="app-title"></span>
+        <span id="app-meta"></span>
+      </div>
+      <div id="app-header-right">
+        <button id="sort-download-btn" class="hdr-btn-primary" disabled>↓ XLSX 다운로드</button>
+        <button id="generate-vba-btn" class="hdr-btn" style="display:none">VBA 코드 생성</button>
+        <button id="save-rules-btn" class="hdr-btn" style="display:none">rules.json 저장</button>
+        <label class="hdr-btn" id="inline-bas-label">
+          BAS 불러오기
+          <input type="file" id="inline-bas-input" accept=".bas,.txt" multiple style="display:none" />
+        </label>
+        <label class="hdr-btn" id="inline-rules-label">
+          rules.json 불러오기
+          <input type="file" id="inline-rules-input" accept=".json" style="display:none" />
+        </label>
+        <button id="reset-btn" class="hdr-btn">다른 파일 열기</button>
+      </div>
+    </div>
+
+    <div id="app-body">
+      <div id="sidebar">
+        <div id="sidebar-header">
+          <span>시트 목록</span>
+          <span id="sidebar-progress"></span>
+        </div>
+        <div id="sidebar-list"></div>
+      </div>
+
+      <div id="main-panel">
+        <div id="main-empty">
+          <div class="empty-icon">←</div>
+          <div>시트를 선택하면 정렬 기준을 설정할 수 있습니다</div>
+        </div>
+        <div id="main-content">
+          <div id="config-area">
+            <div id="config-area-header">
+              <div>
+                <div id="config-sheet-name"></div>
+                <div id="config-sheet-subtitle"></div>
+              </div>
+              <div id="config-actions">
+                <button class="btn btn-danger-ghost" id="config-reset-btn">기준 초기화</button>
+                <button class="btn btn-primary" id="config-confirm-btn" disabled>확정</button>
+              </div>
+            </div>
+            <div id="config-levels"></div>
+          </div>
+          <div id="preview-area">
+            <div id="preview-area-header"><h3>미리보기</h3></div>
+            <div id="preview-table-wrap"><table id="preview-table"></table></div>
+          </div>
+          <div id="log-panel"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── STATE ──
+    let xlsxFile      = null;
+    let parsedSheets  = [];
+    let sheetConfigs  = {};
+    let selectedSheet = null;
+    let editLevels    = [];
+    let preloadedRules = null;
+    let currentFileName = '';
+
+    const SAMPLE_COUNT      = 5;
+    const REORDER_THRESHOLD = 50;
+    const END_COLS          = 3;
+    const newLevel = () => ({ steps: [{ delimiter: ',', position: null }], values: null, reorderOpen: false, mode: 'custom', collapsed: false });
+    const newStep  = () => ({ delimiter: '.', position: null });
+
+    const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    function setStatus(msg, type = '') {
+      const el = document.getElementById('status');
+      el.textContent = msg; el.className = type;
+    }
+    function logSort(msg, type = 'info') {
+      const panel = document.getElementById('log-panel');
+      panel.style.display = 'block';
+      const line = document.createElement('div');
+      line.className = 'log-' + type; line.textContent = msg;
+      panel.appendChild(line); panel.scrollTop = panel.scrollHeight;
+    }
+    function clearLog() {
+      const panel = document.getElementById('log-panel');
+      panel.innerHTML = ''; panel.style.display = 'none';
+    }
+
+    // ── UPLOAD ──
+    const uploadZone = document.getElementById('upload-zone');
+    const fileInput  = document.getElementById('file-input');
+
+    uploadZone.addEventListener('click', () => fileInput.click());
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+    uploadZone.addEventListener('drop', e => {
+      e.preventDefault(); uploadZone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+    document.getElementById('reset-btn').addEventListener('click', reset);
+
+    // ── BAS PRELOAD ──
+    document.getElementById('bas-preload-label').addEventListener('click', () => document.getElementById('bas-preload-input').click());
+    document.getElementById('bas-preload-input').addEventListener('change', async e => {
+      const files = Array.from(e.target.files); if (!files.length) return;
+      if (!preloadedRules) preloadedRules = {};
+      const { added, failed } = await applyBASToRuleMap(files, preloadedRules);
+      const count = Object.keys(preloadedRules).length;
+      document.getElementById('rules-badge-text').textContent =
+        `✓ BAS ${files.length}개 — ${count}개 시트 규칙 준비됨${failed > 0 ? ` (${failed}개 실패)` : ''}`;
+      document.getElementById('rules-badge').classList.add('show');
+      e.target.value = '';
+    });
+
+    // ── RULES PRELOAD ──
+    document.getElementById('rules-preload-label').addEventListener('click', () => document.getElementById('rules-preload-input').click());
+    document.getElementById('rules-preload-input').addEventListener('change', e => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          preloadedRules = JSON.parse(ev.target.result);
+          const count = Object.keys(preloadedRules).length;
+          document.getElementById('rules-badge-text').textContent = `✓ rules.json — ${count}개 시트 설정 준비됨`;
+          document.getElementById('rules-badge').classList.add('show');
+        } catch { setStatus('rules.json 파싱 실패.', 'error'); preloadedRules = null; }
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    });
+    document.getElementById('rules-badge-clear').addEventListener('click', () => {
+      preloadedRules = null;
+      document.getElementById('rules-badge').classList.remove('show');
+    });
+
+    function handleFile(file) {
+      if (!file.name.match(/\.xlsx?$/i)) { setStatus('XLSX 파일만 업로드할 수 있습니다.', 'error'); return; }
+      setStatus('파일을 읽는 중...');
+      const reader = new FileReader();
+      reader.onload  = e => { try { parseXLSX(e.target.result, file); } catch(err) { setStatus('파싱 오류: ' + err.message, 'error'); } };
+      reader.onerror = () => setStatus('파일을 읽을 수 없습니다.', 'error');
+      reader.readAsArrayBuffer(file);
+    }
+
+    // ── XLSX PARSE ──
+    function parseXLSX(buffer, file) {
+      xlsxFile = file;
+      const wb = XLSX.read(buffer, { type: 'arraybuffer' });
+      parsedSheets = []; sheetConfigs = {}; selectedSheet = null; editLevels = [];
+      currentFileName = file.name.replace(/\.[^.]+$/, '');
+
+      for (const name of wb.SheetNames) parsedSheets.push(parseSheet(name, wb.Sheets[name]));
+
+      const total = parsedSheets.reduce((s, sh) => s + sh.gameKeys.length, 0);
+      let autoApplied = 0;
+      if (preloadedRules) {
+        for (const [name, cfg] of Object.entries(preloadedRules)) {
+          if (parsedSheets.find(s => s.name === name)) { sheetConfigs[name] = cfg; autoApplied++; }
+        }
+      }
+
+      document.getElementById('app-title').textContent = currentFileName;
+      document.getElementById('app-meta').textContent  = `${parsedSheets.length}개 시트 · GameKey ${total.toLocaleString()}개`;
+
+      clearLog(); renderSidebar(); updateExportPanel();
+      document.getElementById('app-screen').classList.add('visible');
+      document.getElementById('main-empty').style.display = 'flex';
+      document.getElementById('main-content').classList.remove('visible');
+
+      if (autoApplied > 0) {
+        const first = Object.keys(preloadedRules).find(n => sheetConfigs[n]);
+        if (first) selectSheet(first);
+      } else {
+        const first = parsedSheets.find(s => s.gameKeys.length > 0);
+        if (first) selectSheet(first.name);
+      }
+    }
+
+    function parseSheet(name, ws) {
+      if (!ws['!ref']) return { name, headers: [], rows: [], gameKeys: [] };
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      const headers = [], rows = [];
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: range.s.r, c })];
+        headers.push(cell ? String(cell.v) : '');
+      }
+      for (let r = range.s.r + 1; r <= range.e.r; r++) {
+        const row = []; let hasData = false;
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const cell = ws[XLSX.utils.encode_cell({ r, c })];
+          const val  = (cell && cell.v !== undefined) ? String(cell.v) : '';
+          row.push(val); if (val) hasData = true;
+        }
+        if (hasData) rows.push(row);
+      }
+      const gameKeys = rows.map(r => (r[1] || '').trim()).filter(k => k !== '');
+      return { name, headers, rows, gameKeys };
+    }
+
+    // ── BAS PARSER ──
+    function parseExtractSteps(body) {
+      const steps = [], lines = body.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const sm = lines[i].match(/p\s*=\s*Split\s*\(\s*v\s*,\s*"([^"]+)"\s*\)/);
+        if (!sm) continue;
+        for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
+          const tm = lines[j].match(/\bv\s*=\s*p\s*\((\d+)\)/);
+          if (tm) { steps.push({ delimiter: sm[1], position: +tm[1] }); break; }
+        }
+      }
+      return steps;
+    }
+    function parseOrderValues(body) {
+      const entries = [], re = /Case\s+"([^"]+)"\s*:\s*\w+\s*=\s*(\d+)/g;
+      let m;
+      while ((m = re.exec(body)) !== null) entries.push({ val: m[1], ord: +m[2] });
+      entries.sort((a, b) => a.ord - b.ord);
+      return entries.map(e => e.val);
+    }
+    function parseBAS(content) {
+      const src = content.replace(/\r\n/g, '\n');
+      const sheetM = src.match(/Case\s+"([^"]+)"\s*:\s*SST_Sort_/);
+      if (!sheetM) return null;
+      const sheetName = sheetM[1];
+      const extractFns = {}, orderFns = {};
+      let m;
+      const exRe = /Function\s+SST_[A-Za-z0-9]+_L(\d+)_Extract\s*\([^)]*\)[^\n]*\n([\s\S]*?)End Function/g;
+      while ((m = exRe.exec(src)) !== null) extractFns[+m[1]] = parseExtractSteps(m[2]);
+      const orRe = /Function\s+SST_[A-Za-z0-9]+_L(\d+)_Order\s*\([^)]*\)[^\n]*\n([\s\S]*?)End Function/g;
+      while ((m = orRe.exec(src)) !== null) orderFns[+m[1]] = parseOrderValues(m[2]);
+      const skM = src.match(/Function\s+SST_[A-Za-z0-9]+_SortKey\s*\([^)]*\)[^\n]*\n([\s\S]*?)End Function/);
+      if (!skM) return null;
+      const levels = [];
+      const lvRe = /(?:Format\s*\(\s*SST_[A-Za-z0-9]+_L(\d+)_Order|SST_PadStr\s*\(\s*SST_[A-Za-z0-9]+_L(\d+)_Extract)/g;
+      while ((m = lvRe.exec(skM[1])) !== null) {
+        const n = +(m[1] ?? m[2]), isCustom = m[1] !== undefined;
+        levels.push({ steps: extractFns[n] ?? [], mode: isCustom ? 'custom' : 'alpha', values: isCustom ? (orderFns[n] ?? []) : [] });
+      }
+      return levels.length ? { sheetName, levels } : null;
+    }
+    async function applyBASToRuleMap(files, ruleMap) {
+      let added = 0, failed = 0;
+      for (const file of files) {
+        try {
+          const rule = parseBAS(await file.text());
+          if (rule) { ruleMap[rule.sheetName] = { levels: rule.levels }; added++; }
+          else failed++;
+        } catch { failed++; }
+      }
+      return { added, failed };
+    }
+
+    // ── SIDEBAR ──
+    function showToast(msg) {
+      let toast = document.getElementById('toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = msg;
+      toast.className = 'toast-show';
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => { toast.className = ''; }, 2200);
+    }
+
+    function renderSidebar() {
+      const list = document.getElementById('sidebar-list');
+      list.innerHTML = '';
+      const avail = parsedSheets.filter(s => s.gameKeys.length > 0).length;
+      const done  = parsedSheets.filter(s => sheetConfigs[s.name]).length;
+      const prog  = document.getElementById('sidebar-progress');
+      prog.textContent = avail > 0 ? `${done}/${avail}` : '';
+      prog.className   = (avail > 0 && done === avail) ? 'done' : '';
+
+      for (const sheet of parsedSheets) {
+        const cfg = sheetConfigs[sheet.name], noKeys = sheet.gameKeys.length === 0, active = selectedSheet === sheet.name;
+        const item = document.createElement('div');
+        item.className = 'sidebar-item' + (noKeys ? ' no-keys' : '') + (cfg ? ' configured' : '') + (active ? ' active' : '');
+        const icon = document.createElement('span');
+        icon.className = 'sidebar-icon';
+        icon.textContent = noKeys ? '—' : cfg ? '✓' : '○';
+        const info = document.createElement('div'); info.className = 'sidebar-info';
+        const nameEl = document.createElement('div'); nameEl.className = 'sidebar-name'; nameEl.textContent = sheet.name; nameEl.title = sheet.name;
+        const meta = document.createElement('div'); meta.className = 'sidebar-meta';
+        if (noKeys)   meta.textContent = 'GameKey 없음';
+        else if (cfg) meta.textContent = `${sheet.gameKeys.length.toLocaleString()}개 · 기준 ${cfg.levels.length}개`;
+        else          meta.textContent = `${sheet.gameKeys.length.toLocaleString()}개`;
+        info.appendChild(nameEl); info.appendChild(meta);
+        item.appendChild(icon); item.appendChild(info);
+        if (!noKeys) item.addEventListener('click', () => selectSheet(sheet.name));
+        list.appendChild(item);
+      }
+    }
+
+    // ── SELECT SHEET ──
+    function selectSheet(name) {
+      selectedSheet = name;
+      const existing = sheetConfigs[name];
+      editLevels = existing
+        ? existing.levels.map(l => ({ steps: l.steps.map(s => ({...s})), values: l.values ? [...l.values] : [], reorderOpen: false, mode: l.mode || 'custom', collapsed: false }))
+        : [newLevel()];
+      renderSidebar();
+      const sheet = parsedSheets.find(s => s.name === name);
+      document.getElementById('config-sheet-name').textContent    = name;
+      document.getElementById('config-sheet-subtitle').textContent = `GameKey ${sheet.gameKeys.length.toLocaleString()}개`;
+      document.getElementById('main-empty').style.display = 'none';
+      document.getElementById('main-content').classList.add('visible');
+      renderConfigArea();
+      if (existing) renderPreviewArea(name);
+      else document.getElementById('preview-area').classList.remove('visible');
+    }
+
+    // ── CONFIG AREA ──
+    function renderConfigArea() {
+      const sheet = parsedSheets.find(s => s.name === selectedSheet);
+      const gks   = sheet.gameKeys;
+      const container = document.getElementById('config-levels');
+      container.innerHTML = '';
+      let dragLevelIdx = null;
+
+      editLevels.forEach((level, li) => {
+        const card = document.createElement('div');
+        card.className = 'sort-level-card' + (level.collapsed ? ' collapsed' : '');
+
+        const hdr = document.createElement('div'); hdr.className = 'level-header';
+        const grip = document.createElement('span'); grip.className = 'level-grip'; grip.textContent = '⠿'; grip.title = '드래그해서 순서 변경'; grip.draggable = true;
+        grip.addEventListener('dragstart', e => { dragLevelIdx = li; card.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setDragImage(card, 20, 16); } catch(_) {} });
+        grip.addEventListener('dragend', () => { container.querySelectorAll('.sort-level-card').forEach(el => el.classList.remove('dragging','drag-over')); dragLevelIdx = null; });
+        const colBtn = document.createElement('button'); colBtn.className = 'level-collapse-btn'; colBtn.textContent = level.collapsed ? '▶' : '▼';
+        colBtn.addEventListener('click', () => { level.collapsed = !level.collapsed; renderConfigArea(); });
+        const title = document.createElement('span'); title.className = 'level-title'; title.textContent = `정렬 기준 ${li + 1}`;
+        title.addEventListener('click', () => { level.collapsed = !level.collapsed; renderConfigArea(); });
+        hdr.appendChild(grip); hdr.appendChild(colBtn); hdr.appendChild(title);
+
+        if (level.collapsed) {
+          const summary = document.createElement('span'); summary.className = 'level-summary';
+          if (isLevelComplete(level)) {
+            const modeStr = level.mode === 'alpha' ? '알파벳' : `커스텀 ${level.values?.length ?? 0}종`;
+            const stepStr = level.steps.map(s => {
+              const lbl = s.position <= -BASE_OFFSET ? `기본키[${-(s.position+BASE_OFFSET)}]` : s.position < 0 ? `끝[${-s.position}]` : `[${s.position+1}]`;
+              return `"${s.delimiter}"${lbl}`;
+            }).join(' → ');
+            summary.textContent = `${stepStr}  ·  ${modeStr}`;
+          } else { summary.textContent = '미설정'; summary.style.color = 'var(--danger)'; summary.style.opacity = '0.7'; }
+          hdr.appendChild(summary);
+        }
+        if (editLevels.length > 1) {
+          const delBtn = document.createElement('button'); delBtn.className = 'level-del-btn'; delBtn.textContent = '삭제';
+          delBtn.addEventListener('click', () => { editLevels.splice(li, 1); renderConfigArea(); });
+          hdr.appendChild(delBtn);
+        }
+        card.appendChild(hdr);
+
+        card.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragLevelIdx !== null && dragLevelIdx !== li) card.classList.add('drag-over'); });
+        card.addEventListener('dragleave', e => { if (!card.contains(e.relatedTarget)) card.classList.remove('drag-over'); });
+        card.addEventListener('drop', e => {
+          e.preventDefault(); card.classList.remove('drag-over');
+          if (dragLevelIdx === null || dragLevelIdx === li) return;
+          const [moved] = editLevels.splice(dragLevelIdx, 1); editLevels.splice(li, 0, moved); renderConfigArea();
+        });
+
+        if (!level.collapsed) {
+          let prevComplete = true;
+          for (let si = 0; si < level.steps.length; si++) {
+            if (!prevComplete) break;
+            const step = level.steps[si];
+            const inputVals  = flowValues(gks, level.steps, si);
+            const sampleUniq = uniqueOrdered(inputVals).slice(0, SAMPLE_COUNT);
+
+            const inputDiv = document.createElement('div'); inputDiv.className = 'step-input-preview';
+            const lbl = document.createElement('span'); lbl.className = 'preview-label'; lbl.textContent = si === 0 ? 'GameKey 샘플' : '↓ 이전 단계 결과';
+            inputDiv.appendChild(lbl);
+            const samplesEl = document.createElement('div'); samplesEl.className = 'sample-vals';
+            sampleUniq.forEach(v => { const s = document.createElement('span'); s.className = 'sample-val'; s.textContent = v.length > 70 ? v.slice(0,67)+'…' : v; samplesEl.appendChild(s); });
+            inputDiv.appendChild(samplesEl); card.appendChild(inputDiv);
+
+            const stepDiv = document.createElement('div'); stepDiv.className = 'step-block';
+            const delimRow = document.createElement('div'); delimRow.className = 'delim-row';
+            delimRow.innerHTML = `<span class="step-arrow">↓</span><span class="step-op-label">split by</span>`;
+            const delimIn = document.createElement('input'); delimIn.className = 'delim-mini'; delimIn.type = 'text'; delimIn.value = step.delimiter; delimIn.maxLength = 5;
+            delimIn.addEventListener('change', () => { step.delimiter = delimIn.value || step.delimiter; step.position = null; level.values = null; for (let k = si+1; k < level.steps.length; k++) level.steps[k].position = null; renderConfigArea(); });
+            delimRow.appendChild(delimIn);
+            if (si > 0) {
+              const rmBtn = document.createElement('button'); rmBtn.className = 'step-remove-btn'; rmBtn.textContent = '단계 삭제';
+              rmBtn.addEventListener('click', () => { level.steps.splice(si,1); level.values = null; for (let k=si; k<level.steps.length; k++) level.steps[k].position=null; renderConfigArea(); });
+              delimRow.appendChild(rmBtn);
+            }
+            stepDiv.appendChild(delimRow);
+
+            const tokenized = sampleUniq.map(v => String(v).split(step.delimiter));
+            const maxCols   = tokenized.reduce((m, t) => Math.max(m, t.length), 0);
+            if (maxCols > 0) {
+              const wrap = document.createElement('div'); wrap.className = 'token-table-wrap';
+              const table = document.createElement('table');
+              const thead = document.createElement('thead'); const hrow = document.createElement('tr');
+              for (let c = 0; c < maxCols; c++) {
+                const th = document.createElement('th'); th.textContent = `${c+1}번째`;
+                if (step.position === c) th.classList.add('selected');
+                th.addEventListener('click', () => { step.position = c; level.values = null; for (let k=si+1; k<level.steps.length; k++) level.steps[k].position=null; renderConfigArea(); });
+                hrow.appendChild(th);
+              }
+              for (let e = 1; e <= END_COLS; e++) {
+                const th = document.createElement('th'); th.textContent = `끝[${e}]`; th.classList.add('th-end'); th.title = `뒤에서 ${e}번째`;
+                if (step.position === -e) th.classList.add('selected');
+                th.addEventListener('click', () => { step.position = -e; level.values = null; for (let k=si+1; k<level.steps.length; k++) level.steps[k].position=null; renderConfigArea(); });
+                hrow.appendChild(th);
+              }
+              thead.appendChild(hrow); table.appendChild(thead);
+              const tbody = document.createElement('tbody');
+              tokenized.forEach(tokens => {
+                const tr = document.createElement('tr');
+                for (let c = 0; c < maxCols; c++) {
+                  const td = document.createElement('td');
+                  if (tokens[c] !== undefined) { td.textContent = tokens[c].length > 45 ? tokens[c].slice(0,42)+'…' : tokens[c]; if (step.position === c) td.classList.add('selected'); }
+                  else { td.textContent = '—'; td.classList.add('empty'); }
+                  tr.appendChild(td);
+                }
+                for (let e = 1; e <= END_COLS; e++) {
+                  const td = document.createElement('td'); td.classList.add('td-end');
+                  const endIdx = tokens.length - e;
+                  if (endIdx >= 0) { const v = tokens[endIdx]; td.textContent = v.length > 45 ? v.slice(0,42)+'…' : v; if (step.position === -e) td.classList.add('selected'); }
+                  else { td.textContent = '—'; td.classList.add('empty'); }
+                  tr.appendChild(td);
+                }
+                tbody.appendChild(tr);
+              });
+              table.appendChild(tbody); wrap.appendChild(table); stepDiv.appendChild(wrap);
+            }
+            card.appendChild(stepDiv);
+            if (step.position === null) prevComplete = false;
+          }
+
+          if (prevComplete) {
+            const allExtracted = uniqueOrdered(flowValues(gks, level.steps, level.steps.length));
+            if (level._customOrder !== undefined) {
+              // 텍스트박스로 직접 입력한 경우
+              level.values = level._customOrder.split('\n').map(s => s.trim()).filter(Boolean);
+            } else if (!level.values) {
+              // 처음 추출
+              level.values = allExtracted;
+            } else if (allExtracted.length > REORDER_THRESHOLD && level.values.length <= REORDER_THRESHOLD) {
+              // JSON에서 불러온 소규모 values가 있는데 추출값은 많은 경우 → _customOrder로 초기화
+              level._customOrder = level.values.join('\n');
+            }
+            const modeRow = document.createElement('div'); modeRow.className = 'mode-row';
+            const modeLabel = document.createElement('span'); modeLabel.className = 'mode-label'; modeLabel.textContent = '정렬 방식';
+            modeRow.appendChild(modeLabel);
+            ['custom','alpha'].forEach(m => {
+              const btn = document.createElement('button'); btn.className = 'mode-btn' + (level.mode === m ? ' active' : '');
+              btn.textContent = m === 'custom' ? '직접 순서 지정' : '알파벳 자동 정렬';
+              btn.addEventListener('click', () => { level.mode = m; level.reorderOpen = false; renderConfigArea(); });
+              modeRow.appendChild(btn);
+            });
+            card.appendChild(modeRow);
+
+            const reorderSection = document.createElement('div'); reorderSection.className = 'reorder-section';
+            const toggleRow = document.createElement('div'); toggleRow.className = 'reorder-toggle-row';
+            const countSpan = document.createElement('span'); countSpan.className = 'extracted-count'; countSpan.textContent = `추출된 값 — ${allExtracted.length}개`;
+
+            if (level.mode === 'alpha') {
+              const note = document.createElement('span'); note.className = 'mode-alpha-note'; note.textContent = '알파벳 / 숫자 순으로 자동 정렬됩니다';
+              toggleRow.appendChild(countSpan); toggleRow.appendChild(note); reorderSection.appendChild(toggleRow); card.appendChild(reorderSection);
+              const addStepBtn2 = document.createElement('button'); addStepBtn2.className = 'add-step-btn'; addStepBtn2.textContent = '+ 단계 추가';
+              addStepBtn2.addEventListener('click', () => { level.steps.push(newStep()); level.values = null; renderConfigArea(); });
+              card.appendChild(addStepBtn2);
+            } else {
+              if (allExtracted.length > REORDER_THRESHOLD) {
+                // 값이 많을 때: 직접 입력 텍스트박스
+                const hint = document.createElement('span'); hint.className = 'reorder-too-many';
+                hint.textContent = `값 많음 — 우선순위 직접 입력`;
+                toggleRow.appendChild(countSpan); toggleRow.appendChild(hint);
+                reorderSection.appendChild(toggleRow);
+                const taDesc = document.createElement('p'); taDesc.className = 'preview-label';
+                taDesc.style.marginTop = '8px';
+                taDesc.textContent = '우선 정렬할 값을 한 줄에 하나씩. 목록에 없는 값은 알파순으로 뒤에 정렬됩니다.';
+                const ta = document.createElement('textarea'); ta.className = 'manual-order-ta';
+                ta.placeholder = '예:\nName\nname\nDesc';
+                ta.value = level._customOrder || '';
+                ta.addEventListener('input', () => {
+                  level._customOrder = ta.value;
+                  level.values = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+                });
+                reorderSection.appendChild(taDesc); reorderSection.appendChild(ta);
+              } else {
+                const toggleBtn = document.createElement('button'); toggleBtn.className = 'reorder-toggle-btn';
+                toggleBtn.textContent = level.reorderOpen ? '순서 편집 ▲' : '순서 편집 ▼';
+                toggleBtn.addEventListener('click', () => { level.reorderOpen = !level.reorderOpen; renderConfigArea(); });
+                toggleRow.appendChild(countSpan); toggleRow.appendChild(toggleBtn);
+              }
+              reorderSection.appendChild(toggleRow);
+
+              if (level.reorderOpen && level.values.length <= REORDER_THRESHOLD) {
+                const list = document.createElement('ul'); list.className = 'reorder-list';
+                level.values.forEach((val, vi) => {
+                  const item = document.createElement('li'); item.className = 'reorder-item'; item.draggable = true; item.dataset.idx = String(vi);
+                  const grip2 = document.createElement('span'); grip2.className = 'reorder-grip'; grip2.textContent = '⠿';
+                  const valSpan = document.createElement('span'); valSpan.className = 'reorder-val'; valSpan.textContent = val;
+                  const rank = document.createElement('span'); rank.className = 'reorder-rank'; rank.textContent = `${vi+1}순위`;
+                  item.appendChild(grip2); item.appendChild(valSpan); item.appendChild(rank); list.appendChild(item);
+                });
+                let dragSrcIdx = null;
+                list.addEventListener('dragstart', e => { const it = e.target.closest('.reorder-item'); if (!it) return; dragSrcIdx = +it.dataset.idx; it.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+                list.addEventListener('dragend', () => { list.querySelectorAll('.reorder-item').forEach(el => el.classList.remove('dragging','drag-over')); dragSrcIdx = null; });
+                list.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const it = e.target.closest('.reorder-item'); if (!it) return; list.querySelectorAll('.reorder-item').forEach(el => el.classList.remove('drag-over')); if (+it.dataset.idx !== dragSrcIdx) it.classList.add('drag-over'); });
+                list.addEventListener('dragleave', e => { const it = e.target.closest('.reorder-item'); if (it) it.classList.remove('drag-over'); });
+                list.addEventListener('drop', e => {
+                  e.preventDefault(); const it = e.target.closest('.reorder-item');
+                  if (!it || dragSrcIdx === null) return;
+                  const dest = +it.dataset.idx; if (dragSrcIdx === dest) return;
+                  const [moved] = level.values.splice(dragSrcIdx, 1); level.values.splice(dest, 0, moved); renderConfigArea();
+                });
+                reorderSection.appendChild(list);
+              }
+              card.appendChild(reorderSection);
+              const addStepBtn = document.createElement('button'); addStepBtn.className = 'add-step-btn'; addStepBtn.textContent = '+ 단계 추가';
+              addStepBtn.addEventListener('click', () => { level.steps.push(newStep()); level.values = null; renderConfigArea(); });
+              card.appendChild(addStepBtn);
+            }
+          }
+        }
+        container.appendChild(card);
+      });
+
+      const addLvlBtn = document.createElement('button'); addLvlBtn.className = 'add-level-btn'; addLvlBtn.textContent = '+ 정렬 기준 추가';
+      addLvlBtn.addEventListener('click', () => { editLevels.push(newLevel()); renderConfigArea(); });
+      container.appendChild(addLvlBtn);
+      document.getElementById('config-confirm-btn').disabled = !(editLevels.length > 0 && editLevels.every(isLevelComplete));
+    }
+
+    // ── CONFIRM ──
+    document.getElementById('config-confirm-btn').addEventListener('click', () => {
+      sheetConfigs[selectedSheet] = {
+        levels: editLevels.map(l => ({ steps: l.steps.map(s => ({...s})), values: l.values || [], mode: l.mode || 'custom' }))
+      };
+      renderSidebar(); updateExportPanel(); renderPreviewArea(selectedSheet);
+      showToast(`✓ "${selectedSheet}" 확정 완료`);
+    });
+
+    document.getElementById('config-reset-btn').addEventListener('click', () => { editLevels = [newLevel()]; renderConfigArea(); });
+
+    // ── PREVIEW AREA ──
+    function renderPreviewArea(sheetName) {
+      const previewArea = document.getElementById('preview-area');
+      previewArea.classList.add('visible');
+      const sheet = parsedSheets.find(s => s.name === sheetName);
+      const cfg   = sheetConfigs[sheetName];
+      if (!sheet || !cfg) return;
+
+      const sorted = sortedRowsForPreview(sheet, cfg);
+      const table  = document.getElementById('preview-table');
+      table.innerHTML = '';
+
+      const thead = document.createElement('thead'); const hrow = document.createElement('tr');
+      const thSort = document.createElement('th'); thSort.className = 'th-sortkey'; thSort.textContent = '정렬키'; thSort.style.width = '160px';
+      hrow.appendChild(thSort);
+      sheet.headers.forEach((h, i) => {
+        const th = document.createElement('th'); th.textContent = h || `열${i+1}`;
+        if (i === 1) { th.className = 'th-gamekey'; th.style.width = '320px'; } else { th.style.width = '110px'; }
+        hrow.appendChild(th);
+      });
+      thead.appendChild(hrow); table.appendChild(thead);
+      addColResizeHandles(table);
+
+      const tbody = document.createElement('tbody');
+      sorted.forEach(row => {
+        const tr = document.createElement('tr');
+        const tdSort = document.createElement('td');
+        const tagsDiv = document.createElement('div'); tagsDiv.className = 'sort-key-tags';
+        cfg.levels.forEach(level => {
+          const val = extractValue(row[1] || '', level.steps);
+          const tag = document.createElement('span');
+          tag.className = 'sort-key-tag' + (level.values.includes(val) ? '' : ' unknown');
+          tag.textContent = val || '?'; tagsDiv.appendChild(tag);
+        });
+        tdSort.appendChild(tagsDiv); tr.appendChild(tdSort);
+        row.forEach((cell, i) => { const td = document.createElement('td'); td.textContent = cell; if (i===1) td.className='td-gamekey'; tr.appendChild(td); });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      setTimeout(() => { const p = document.getElementById('main-panel'); p.scrollTo({ top: previewArea.offsetTop - 16, behavior: 'smooth' }); }, 50);
+    }
+
+    function addColResizeHandles(table) {
+      table.querySelectorAll('thead th').forEach(th => {
+        const handle = document.createElement('div'); handle.className = 'col-resize-handle'; th.appendChild(handle);
+        let startX, startW;
+        handle.addEventListener('mousedown', e => {
+          e.preventDefault(); e.stopPropagation(); startX = e.clientX; startW = th.offsetWidth;
+          handle.classList.add('dragging'); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+          const onMove = e => { th.style.width = Math.max(50, startW + (e.clientX - startX)) + 'px'; };
+          const onUp = () => { handle.classList.remove('dragging'); document.body.style.cursor=''; document.body.style.userSelect=''; document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); };
+          document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+        });
+      });
+    }
+
+    // ── SORT ENGINE ──
+    // position 인코딩: >= 0 앞에서 N번째 / -1~-99 끝에서 N번째 / <= -100 기본키(끝 N개 제거 후 재결합)
+    const BASE_OFFSET = 100;
+
+    function extractValue(gk, steps) {
+      let val = gk;
+      for (const { delimiter, position } of steps) {
+        const parts = String(val).split(delimiter);
+        if (position !== null && position <= -BASE_OFFSET) {
+          const excludeN = -(position + BASE_OFFSET);
+          val = excludeN > 0 && excludeN < parts.length ? parts.slice(0, -excludeN).join(delimiter) : val;
+        } else {
+          const idx = position < 0 ? parts.length + position : position;
+          val = (parts[idx] !== undefined) ? parts[idx] : '';
+        }
+        if (!val) break;
+      }
+      return val;
+    }
+    function naturalCompare(a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' }); }
+
+    function sortedRowsForPreview(sheet, cfg) {
+      return [...sheet.rows].sort((a, b) => {
+        for (const level of cfg.levels) {
+          const va = extractValue(a[1]||'', level.steps), vb = extractValue(b[1]||'', level.steps);
+          if (level.mode === 'alpha') { const c = naturalCompare(va, vb); if (c !== 0) return c; }
+          else { const ia=level.values.indexOf(va), ib=level.values.indexOf(vb); const oa=ia===-1?9999:ia, ob=ib===-1?9999:ib; if (oa!==ob) return oa-ob; }
+        }
+        return naturalCompare(a[1]||'', b[1]||'');
+      });
+    }
+    function sortRows(rows, levels) {
+      return [...rows].sort((a, b) => {
+        for (const level of levels) {
+          const va = extractValue(a[1]||'', level.steps), vb = extractValue(b[1]||'', level.steps);
+          if (level.mode === 'alpha') { const c = naturalCompare(va, vb); if (c !== 0) return c; }
+          else { const ia=level.values.indexOf(va), ib=level.values.indexOf(vb); const oa=ia===-1?9999:ia, ob=ib===-1?9999:ib; if (oa!==ob) return oa-ob; }
+        }
+        return naturalCompare(a[1]||'', b[1]||'');
+      });
+    }
+
+    function flowValues(gameKeys, steps, upToStep) {
+      let vals = gameKeys.slice();
+      for (let i = 0; i < upToStep; i++) {
+        const { delimiter, position } = steps[i]; if (position === null) return vals;
+        const next = [];
+        for (const v of vals) {
+          const p = String(v).split(delimiter);
+          let ex;
+          if (position <= -BASE_OFFSET) {
+            const excludeN = -(position + BASE_OFFSET);
+            ex = excludeN > 0 && excludeN < p.length ? p.slice(0, -excludeN).join(delimiter) : v;
+          } else {
+            const idx = position < 0 ? p.length + position : position;
+            ex = p[idx] !== undefined ? p[idx] : '';
+          }
+          if (ex) next.push(ex);
+        }
+        vals = next;
+      }
+      return vals;
+    }
+    function uniqueOrdered(vals) { const seen = new Set(), result = []; for (const v of vals) { if (!seen.has(v)) { seen.add(v); result.push(v); } } return result; }
+    function isLevelComplete(level) { return level.steps.length > 0 && level.steps.every(s => s.position !== null); }
+
+    // ── SORT & DOWNLOAD ──
+    async function runSortAndDownload() {
+      if (!xlsxFile) return;
+      const btn = document.getElementById('sort-download-btn'); btn.disabled = true; clearLog();
+      logSort('정렬 시작...', 'info');
+      try {
+        const buf = await xlsxFile.arrayBuffer();
+        const wb  = XLSX.read(new Uint8Array(buf), { type: 'array' });
+        let sorted = 0, skipped = 0;
+        for (const sheetName of wb.SheetNames) {
+          const rule = sheetConfigs[sheetName];
+          if (!rule) { logSort(`⟳  [${sheetName}]  규칙 없음 — 스킵`, 'warn'); skipped++; continue; }
+          const ws = wb.Sheets[sheetName];
+          const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          if (data.length <= 1) { logSort(`⟳  [${sheetName}]  데이터 없음 — 스킵`, 'warn'); skipped++; continue; }
+          const header = data[0], dataRows = data.slice(1).filter(r => r.some(c => c !== ''));
+          wb.Sheets[sheetName] = XLSX.utils.aoa_to_sheet([header, ...sortRows(dataRows, rule.levels)]);
+          logSort(`✓  [${sheetName}]  ${dataRows.length}행 정렬 완료`, 'ok'); sorted++;
+        }
+        logSort('', 'info'); logSort(`완료 — ${sorted}개 시트 정렬, ${skipped}개 스킵`, 'ok');
+        const suggestedName = `${currentFileName}_sorted.xlsx`;
+        if ('showSaveFilePicker' in window) {
+          try {
+            const handle = await window.showSaveFilePicker({
+              suggestedName,
+              types: [{ description: 'Excel 파일', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }]
+            });
+            const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const writable = await handle.createWritable();
+            await writable.write(new Blob([wbOut], { type: 'application/octet-stream' }));
+            await writable.close();
+            showToast('다운로드가 완료되었습니다.');
+          } catch (e) {
+            if (e.name !== 'AbortError') { XLSX.writeFile(wb, suggestedName); showToast('다운로드가 완료되었습니다.'); } // 오류 시 폴백
+          }
+        } else {
+          XLSX.writeFile(wb, suggestedName);
+          showToast('다운로드가 완료되었습니다.');
+        }
+      } catch (err) { logSort('오류: ' + err.message, 'err'); }
+      btn.disabled = false;
+    }
+    document.getElementById('sort-download-btn').addEventListener('click', runSortAndDownload);
+
+    // ── EXPORT ──
+    function updateExportPanel() {
+      const hasRules = Object.keys(sheetConfigs).length > 0;
+      document.getElementById('sort-download-btn').disabled = !hasRules;
+      document.getElementById('generate-vba-btn').style.display = hasRules ? '' : 'none';
+      document.getElementById('save-rules-btn').style.display   = hasRules ? '' : 'none';
+    }
+
+    // 저장 위치 지정 가능한 파일 저장 (지원 시 picker, 아니면 폴백)
+    async function saveFileWithPicker(suggestedName, content, mimeType, extensions) {
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName,
+            types: [{ description: 'File', accept: { [mimeType]: extensions } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(content instanceof Blob ? content : new Blob([content], { type: mimeType }));
+          await writable.close();
+          return true;
+        } catch (e) {
+          if (e.name === 'AbortError') return false; // 사용자가 취소
+        }
+      }
+      // 폴백: 기존 방식
+      downloadFile(suggestedName, content, mimeType);
+      return true;
+    }
+
+    document.getElementById('generate-vba-btn').addEventListener('click', () =>
+      saveFileWithPicker(`${currentFileName}.bas`, generateVBA(), 'text/plain', ['.bas', '.txt'])
+    );
+    document.getElementById('save-rules-btn').addEventListener('click', () =>
+      saveFileWithPicker(`${currentFileName}_rules.json`, JSON.stringify(sheetConfigs, null, 2), 'application/json', ['.json'])
+    );
+
+    function applyRulesFile(file, inputEl) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const loaded = JSON.parse(ev.target.result); let merged = 0;
+          for (const [name, cfg] of Object.entries(loaded)) { if (parsedSheets.find(s => s.name === name)) { sheetConfigs[name] = cfg; merged++; } }
+          renderSidebar(); updateExportPanel();
+          const first = Object.keys(loaded).find(n => sheetConfigs[n]); if (first) selectSheet(first);
+        } catch { /* silent */ }
+        if (inputEl) inputEl.value = '';
+      };
+      reader.readAsText(file);
+    }
+    document.getElementById('inline-rules-label').addEventListener('click', () => document.getElementById('inline-rules-input').click());
+    document.getElementById('inline-rules-input').addEventListener('change', e => applyRulesFile(e.target.files[0], e.target));
+    document.getElementById('inline-bas-label').addEventListener('click', () => document.getElementById('inline-bas-input').click());
+    document.getElementById('inline-bas-input').addEventListener('change', async e => {
+      const files = Array.from(e.target.files); if (!files.length) return;
+      const { added, failed } = await applyBASToRuleMap(files, sheetConfigs);
+      renderSidebar(); updateExportPanel();
+      const first = Object.keys(sheetConfigs).find(n => parsedSheets.find(s => s.name === n)); if (first) selectSheet(first);
+      e.target.value = '';
+    });
+
+    // ── VBA ──
+    function safeVBAName(n) { let s = n.replace(/[^a-zA-Z0-9]/g,'_'); if (/^\d/.test(s)) s='S_'+s; return s; }
+    function generateVBA() {
+      const now = new Date().toLocaleString('ko-KR'), lines = [];
+      lines.push(`Attribute VB_Name = "StringSortTool"`, `' ${'='.repeat(60)}`, `' Script Sort Tool - 자동 생성 코드`, `' 생성일시: ${now}`, `' ${'='.repeat(60)}`, `Option Explicit`, ``, `' ── 유틸리티 ─────────────────────────────────────────────`, `Function SST_PadStr(s As String, n As Integer) As String`, `    SST_PadStr = Left(s & String(n, " "), n)`, `End Function`, ``);
+      const configuredSheets = parsedSheets.filter(sh => sheetConfigs[sh.name]);
+      for (const sheet of configuredSheets) {
+        const cfg = sheetConfigs[sheet.name], safe = safeVBAName(sheet.name);
+        lines.push(`' ${'─'.repeat(60)}`, `' [시트: ${sheet.name}]`, `' ${'─'.repeat(60)}`, ``);
+        cfg.levels.forEach((level, li) => {
+          const idx = li + 1;
+          lines.push(`' 정렬 기준 ${idx} — ${level.mode==='alpha'?'알파벳 자동 정렬':'직접 순서 지정'}`, `Function SST_${safe}_L${idx}_Extract(gameKey As String) As String`, `    Dim v As String: v = gameKey`, `    Dim p() As String`);
+          level.steps.forEach(({ delimiter, position }) => {
+            const d = delimiter.replace(/"/g,'""');
+            if (position < 0) { lines.push(`    p = Split(v, "${d}"): If UBound(p) < ${-position} Then SST_${safe}_L${idx}_Extract = "": Exit Function`, `    v = p(UBound(p) - ${-position-1})`); }
+            else               { lines.push(`    p = Split(v, "${d}"): If UBound(p) < ${position} Then SST_${safe}_L${idx}_Extract = "": Exit Function`, `    v = p(${position})`); }
+          });
+          lines.push(`    SST_${safe}_L${idx}_Extract = v`, `End Function`, ``);
+          if (level.mode === 'custom') {
+            lines.push(`Function SST_${safe}_L${idx}_Order(gameKey As String) As Long`, `    Select Case SST_${safe}_L${idx}_Extract(gameKey)`);
+            level.values.forEach((val, vi) => lines.push(`        Case "${val.replace(/"/g,'""')}": SST_${safe}_L${idx}_Order = ${vi+1}`));
+            lines.push(`        Case Else: SST_${safe}_L${idx}_Order = 9999`, `    End Select`, `End Function`, ``);
+          }
+        });
+        lines.push(`Function SST_${safe}_SortKey(gameKey As String) As String`, `    Dim k As String: k = ""`);
+        cfg.levels.forEach((level, li) => {
+          const idx = li+1;
+          lines.push(level.mode==='alpha' ? `    k = k & SST_PadStr(SST_${safe}_L${idx}_Extract(gameKey), 80) & Chr(1)` : `    k = k & Format(SST_${safe}_L${idx}_Order(gameKey), "00000") & Chr(1)`);
+        });
+        lines.push(`    SST_${safe}_SortKey = k`, `End Function`, ``, `Sub SST_Sort_${safe}(ws As Worksheet)`, `    Dim lastRow As Long`, `    lastRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row`, `    If lastRow <= 1 Then Exit Sub`, `    Dim hCol As Long`, `    hCol = ws.UsedRange.Column + ws.UsedRange.Columns.Count`, `    Dim i As Long`, `    For i = 2 To lastRow`, `        If Trim(CStr(ws.Cells(i, 2).Value)) <> "" Then`, `            ws.Cells(i, hCol).Value = SST_${safe}_SortKey(CStr(ws.Cells(i, 2).Value))`, `        End If`, `    Next i`, `    ws.UsedRange.Sort Key1:=ws.Cells(1, hCol), Order1:=xlAscending, Header:=xlYes`, `    ws.Columns(hCol).Delete`, `End Sub`, ``);
+      }
+      lines.push(`' ${'─'.repeat(60)}`, `' 메인 진입점 — Excel VBA 에디터에서 이 함수를 실행하세요`, `' ${'─'.repeat(60)}`, ``, `Sub SortAllSheets()`, `    Application.ScreenUpdating = False`, `    Application.Calculation = xlCalculationManual`, `    Dim ws As Worksheet`, `    For Each ws In ThisWorkbook.Worksheets`, `        Select Case ws.Name`);
+      configuredSheets.forEach(sheet => lines.push(`            Case "${sheet.name.replace(/"/g,'""')}": SST_Sort_${safeVBAName(sheet.name)} ws`));
+      lines.push(`        End Select`, `    Next ws`, `    Application.Calculation = xlCalculationAutomatic`, `    Application.ScreenUpdating = True`, `    MsgBox "정렬이 완료되었습니다!", vbInformation`, `End Sub`);
+      return lines.join('\r\n');
+    }
+
+    function downloadFile(filename, content, mimeType) {
+      const blob = new Blob([content], { type: mimeType }), url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    // ── RESET ──
+    function reset() {
+      xlsxFile = null; parsedSheets = []; sheetConfigs = {}; selectedSheet = null; editLevels = [];
+      fileInput.value = ''; setStatus(''); clearLog();
+      document.getElementById('app-screen').classList.remove('visible');
+      updateExportPanel(); fileInput.click();
+    }
+    // ── TOAST ──
+    function showToast(message, type = 'success', duration = 3000) {
+      let container = document.getElementById('toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+      }
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `<span class="toast-icon">${type === 'success' ? '✅' : 'ℹ️'}</span><span>${message}</span>`;
+      container.appendChild(toast);
+      requestAnimationFrame(() => { requestAnimationFrame(() => { toast.classList.add('show'); }); });
+      setTimeout(() => {
+        toast.classList.remove('show');
+        toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+      }, duration);
+    }
+  </script>
+
+  <div id="toast-container"></div>
+</body>
+</html>
