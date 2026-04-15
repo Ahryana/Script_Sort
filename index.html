@@ -87,6 +87,17 @@
     #rules-badge-clear { background: none; border: none; color: var(--success); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; opacity: 0.7; }
     #rules-badge-clear:hover { opacity: 1; }
 
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(12px);
+      z-index: 9999; background: #1e293b; color: #f8fafc;
+      padding: 10px 18px; border-radius: 8px; font-size: 13px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2); pointer-events: none;
+      opacity: 0; transition: opacity 0.2s, transform 0.2s;
+      white-space: nowrap;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
     /* ── APP SCREEN ── */
     #app-screen {
       position: fixed; inset: 0; z-index: 300;
@@ -143,11 +154,12 @@
 
     .sidebar-item {
       display: flex; align-items: center; gap: 10px; padding: 8px 10px;
-      border-radius: 6px; cursor: pointer; border: 1px solid transparent; margin-bottom: 2px;
-      transition: background 0.1s, border-color 0.1s;
+      border-radius: 6px; cursor: pointer; border: 1px solid var(--border); margin-bottom: 5px;
+      background: var(--bg-panel); box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      transition: background 0.1s, border-color 0.1s, box-shadow 0.1s;
     }
-    .sidebar-item:hover:not(.no-keys) { background: var(--bg-item-hover); }
-    .sidebar-item.active { background: var(--bg-active); border-color: var(--accent-dim); }
+    .sidebar-item:hover:not(.no-keys) { background: var(--bg-item-hover); border-color: #cbd5e1; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    .sidebar-item.active { background: var(--bg-active); border-color: var(--accent-dim); box-shadow: 0 2px 6px rgba(30,64,175,0.1); }
     .sidebar-item.no-keys { opacity: 0.4; cursor: default; }
     .sidebar-icon { font-size: 13px; width: 16px; text-align: center; flex-shrink: 0; color: var(--text-muted); }
     .sidebar-item.configured .sidebar-icon { color: var(--success); }
@@ -384,17 +396,16 @@
         📋 BAS 파일 불러오기
         <input type="file" id="bas-preload-input" accept=".bas,.txt" multiple style="display:none" />
       </label>
-      <label class="preload-label" id="rules-preload-label">
-        📄 rules.json 불러오기
-        <input type="file" id="rules-preload-input" accept=".json" style="display:none" />
-      </label>
-      <span id="rules-badge">
+<span id="rules-badge">
         <span id="rules-badge-text"></span>
         <button id="rules-badge-clear" title="초기화">✕</button>
       </span>
     </div>
     <div id="status"></div>
   </main>
+
+  <!-- ── TOAST ── -->
+  <div id="toast"></div>
 
   <!-- ── APP SCREEN ── -->
   <div id="app-screen">
@@ -466,7 +477,6 @@
     let sheetConfigs  = {};
     let selectedSheet = null;
     let editLevels    = [];
-    let preloadedRules = null;
     let currentFileName = '';
 
     const SAMPLE_COUNT      = 5;
@@ -511,33 +521,15 @@
     document.getElementById('bas-preload-label').addEventListener('click', () => document.getElementById('bas-preload-input').click());
     document.getElementById('bas-preload-input').addEventListener('change', async e => {
       const files = Array.from(e.target.files); if (!files.length) return;
-      if (!preloadedRules) preloadedRules = {};
-      const { added, failed } = await applyBASToRuleMap(files, preloadedRules);
-      const count = Object.keys(preloadedRules).length;
+      const tmpRules = {};
+      const { added, failed } = await applyBASToRuleMap(files, tmpRules);
+      const count = Object.keys(tmpRules).length;
       document.getElementById('rules-badge-text').textContent =
         `✓ BAS ${files.length}개 — ${count}개 시트 규칙 준비됨${failed > 0 ? ` (${failed}개 실패)` : ''}`;
       document.getElementById('rules-badge').classList.add('show');
       e.target.value = '';
     });
-
-    // ── RULES PRELOAD ──
-    document.getElementById('rules-preload-label').addEventListener('click', () => document.getElementById('rules-preload-input').click());
-    document.getElementById('rules-preload-input').addEventListener('change', e => {
-      const file = e.target.files[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        try {
-          preloadedRules = JSON.parse(ev.target.result);
-          const count = Object.keys(preloadedRules).length;
-          document.getElementById('rules-badge-text').textContent = `✓ rules.json — ${count}개 시트 설정 준비됨`;
-          document.getElementById('rules-badge').classList.add('show');
-        } catch { setStatus('rules.json 파싱 실패.', 'error'); preloadedRules = null; }
-        e.target.value = '';
-      };
-      reader.readAsText(file);
-    });
     document.getElementById('rules-badge-clear').addEventListener('click', () => {
-      preloadedRules = null;
       document.getElementById('rules-badge').classList.remove('show');
     });
 
@@ -560,12 +552,6 @@
       for (const name of wb.SheetNames) parsedSheets.push(parseSheet(name, wb.Sheets[name]));
 
       const total = parsedSheets.reduce((s, sh) => s + sh.gameKeys.length, 0);
-      let autoApplied = 0;
-      if (preloadedRules) {
-        for (const [name, cfg] of Object.entries(preloadedRules)) {
-          if (parsedSheets.find(s => s.name === name)) { sheetConfigs[name] = cfg; autoApplied++; }
-        }
-      }
 
       document.getElementById('app-title').textContent = currentFileName;
       document.getElementById('app-meta').textContent  = `${parsedSheets.length}개 시트 · GameKey ${total.toLocaleString()}개`;
@@ -575,13 +561,8 @@
       document.getElementById('main-empty').style.display = 'flex';
       document.getElementById('main-content').classList.remove('visible');
 
-      if (autoApplied > 0) {
-        const first = Object.keys(preloadedRules).find(n => sheetConfigs[n]);
-        if (first) selectSheet(first);
-      } else {
-        const first = parsedSheets.find(s => s.gameKeys.length > 0);
-        if (first) selectSheet(first.name);
-      }
+      const first = parsedSheets.find(s => s.gameKeys.length > 0);
+      if (first) selectSheet(first.name);
     }
 
     function parseSheet(name, ws) {
@@ -1149,6 +1130,15 @@
       saveFileWithPicker(`${currentFileName}_rules.json`, JSON.stringify(sheetConfigs, null, 2), 'application/json', ['.json'])
     );
 
+    let _toastTimer = null;
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+    }
+
     function applyRulesFile(file, inputEl) {
       if (!file) return;
       const reader = new FileReader();
@@ -1158,6 +1148,7 @@
           for (const [name, cfg] of Object.entries(loaded)) { if (parsedSheets.find(s => s.name === name)) { sheetConfigs[name] = cfg; merged++; } }
           renderSidebar(); updateExportPanel();
           const first = Object.keys(loaded).find(n => sheetConfigs[n]); if (first) selectSheet(first);
+          showToast(`✓ rules.json 로드 완료 — ${merged}개 시트 설정 적용됨`);
         } catch { /* silent */ }
         if (inputEl) inputEl.value = '';
       };
