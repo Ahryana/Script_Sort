@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Script Sort Tool</title>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -161,6 +161,10 @@
     .sidebar-item:hover:not(.no-keys) { background: var(--bg-item-hover); border-color: #cbd5e1; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
     .sidebar-item.active { background: var(--bg-active); border-color: var(--accent-dim); box-shadow: 0 2px 6px rgba(30,64,175,0.1); }
     .sidebar-item.no-keys { opacity: 0.4; cursor: default; }
+    .sidebar-item.held { background: #fefce8; border-color: #fbbf24; }
+    .sidebar-item.held:hover:not(.no-keys) { background: #fef9c3; border-color: #f59e0b; }
+    .sidebar-item.held.active { background: #fef3c7; border-color: #f59e0b; }
+    .hold-checkbox { width: 14px; height: 14px; accent-color: #d97706; cursor: pointer; flex-shrink: 0; margin-left: auto; }
     .sidebar-icon { font-size: 13px; width: 16px; text-align: center; flex-shrink: 0; color: var(--text-muted); }
     .sidebar-item.configured .sidebar-icon { color: var(--success); }
     .sidebar-item.active .sidebar-icon { color: var(--accent); }
@@ -182,6 +186,17 @@
 
     #main-content { display: none; flex-direction: column; }
     #main-content.visible { display: flex; }
+
+    /* Hold Banner */
+    #hold-banner {
+      display: none; align-items: center; gap: 10px;
+      padding: 10px 16px; background: #fefce8; border-bottom: 2px solid #fbbf24;
+      font-size: 13px; color: #92400e; font-weight: 500;
+    }
+    #hold-banner.visible { display: flex; }
+    #hold-banner-icon { font-size: 16px; }
+    #hold-banner-release { margin-left: auto; background: none; border: 1px solid #f59e0b; border-radius: 4px; color: #b45309; font-size: 12px; padding: 3px 10px; cursor: pointer; }
+    #hold-banner-release:hover { background: #fef3c7; }
 
     /* Config Area */
     #config-area { padding: 24px; border-bottom: 1px solid var(--border); }
@@ -373,6 +388,57 @@
     .toast.show { opacity: 1; transform: translateY(0); }
     .toast.success .toast-icon { color: #34d399; }
     .toast-icon { font-size: 16px; }
+
+    /* ── COLUMN PICKER MODAL ── */
+    #col-picker-backdrop {
+      position: fixed; inset: 0; z-index: 600;
+      background: rgba(0,0,0,0.45);
+      display: none; align-items: center; justify-content: center;
+    }
+    #col-picker-backdrop.show { display: flex; }
+    #col-picker-modal {
+      background: var(--bg-panel); border-radius: 12px;
+      padding: 28px 32px; max-width: 580px; width: 90%;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+    }
+    #col-picker-modal h2 { font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); }
+    #col-picker-modal p { font-size: 13px; color: var(--text-dim); margin-bottom: 20px; line-height: 1.6; }
+    #col-picker-cols { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; max-height: 220px; overflow-y: auto; }
+    .col-picker-btn {
+      padding: 8px 14px; border-radius: 6px; border: 1.5px solid var(--border);
+      background: var(--bg-item); color: var(--text-primary); font-size: 13px; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s; white-space: nowrap;
+    }
+    .col-picker-btn:hover { border-color: var(--accent-dim); background: var(--bg-active); }
+    .col-picker-btn.selected { border-color: var(--accent); background: var(--bg-active); color: var(--accent); font-weight: 600; }
+    .col-picker-btn .col-letter { font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px; font-family: 'Cascadia Code','Consolas',monospace; }
+    .col-picker-btn.selected .col-letter { color: var(--accent-dim); }
+    #col-picker-confirm {
+      padding: 9px 28px; background: var(--accent); color: #fff; border: none;
+      border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    #col-picker-confirm:disabled { opacity: 0.35; cursor: not-allowed; }
+    #col-picker-confirm:not(:disabled):hover { background: #2d52c0; }
+
+    /* ── STEP MODE (split / regex) ── */
+    .step-mode-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+    .step-mode-btn { padding: 3px 10px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 11px; cursor: pointer; transition: all 0.12s; }
+    .step-mode-btn:hover { border-color: var(--accent-dim); color: var(--text-primary); }
+    .step-mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .regex-input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .regex-input { flex: 1; min-width: 0; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; padding: 5px 10px; font-size: 12px; color: var(--text-primary); font-family: 'Cascadia Code','Consolas',monospace; outline: none; }
+    .regex-input:focus { border-color: var(--accent); }
+    .regex-group-sel { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; color: var(--text-primary); outline: none; cursor: pointer; flex-shrink: 0; }
+    .regex-error { font-size: 11px; padding: 4px 8px; border-radius: 4px; background: var(--bg-item); }
+    .regex-match-val { font-size: 11px; font-family: 'Cascadia Code','Consolas',monospace; color: var(--text-dim); background: var(--bg-active); border-radius: 3px; padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .regex-match-val.no-match { color: var(--danger); opacity: 0.7; }
+    .regex-preset-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .regex-preset-btn { padding: 6px 14px; border-radius: 6px; border: 1.5px solid var(--border); background: var(--bg-item); color: var(--text-dim); font-size: 12px; cursor: pointer; transition: all 0.12s; }
+    .regex-preset-btn:hover { border-color: var(--accent-dim); color: var(--text-primary); background: var(--bg-active); }
+    .regex-preset-btn.active { border-color: var(--accent); background: var(--bg-active); color: var(--accent); font-weight: 700; }
+    .regex-preset-desc { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+    .regex-adv-toggle { background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 0; margin-bottom: 6px; display: block; }
+    .regex-adv-toggle:hover { color: var(--accent); text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -447,6 +513,11 @@
           <div>시트를 선택하면 정렬 기준을 설정할 수 있습니다</div>
         </div>
         <div id="main-content">
+          <div id="hold-banner">
+            <span id="hold-banner-icon">⏸</span>
+            <span>이 시트는 <strong>정렬 보류</strong> 상태입니다 — 다운로드 시 정렬이 실행되지 않습니다.</span>
+            <button id="hold-banner-release">보류 해제</button>
+          </div>
           <div id="config-area">
             <div id="config-area-header">
               <div>
@@ -475,15 +546,17 @@
     let xlsxFile      = null;
     let parsedSheets  = [];
     let sheetConfigs  = {};
+    let heldSheets    = new Set(); // 정렬 보류 시트 이름 집합
     let selectedSheet = null;
     let editLevels    = [];
     let currentFileName = '';
+    let gameKeyColIdx = 1; // 0-indexed, default B열(두 번째 열)
 
     const SAMPLE_COUNT      = 5;
     const REORDER_THRESHOLD = 50;
     const END_COLS          = 3;
-    const newLevel = () => ({ steps: [{ delimiter: ',', position: null }], values: null, reorderOpen: false, mode: 'custom', collapsed: false });
-    const newStep  = () => ({ delimiter: '.', position: null });
+    const newLevel = () => ({ steps: [{ type: 'split', delimiter: ',', position: null }], values: null, reorderOpen: false, mode: 'custom', collapsed: false });
+    const newStep  = () => ({ type: 'split', delimiter: '.', position: null });
 
     const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
@@ -545,24 +618,86 @@
     // ── XLSX PARSE ──
     function parseXLSX(buffer, file) {
       xlsxFile = file;
-      const wb = XLSX.read(buffer, { type: 'arraybuffer' });
-      parsedSheets = []; sheetConfigs = {}; selectedSheet = null; editLevels = [];
-      currentFileName = file.name.replace(/\.[^.]+$/, '');
+      const wb = XLSX.read(buffer, { type: 'arraybuffer', sheetStubs: true });
 
-      for (const name of wb.SheetNames) parsedSheets.push(parseSheet(name, wb.Sheets[name]));
+      // 첫 번째 시트의 헤더를 미리 읽어 게임키 열 선택 모달 표시
+      const firstWs = wb.Sheets[wb.SheetNames[0]];
+      const firstHeaders = [];
+      if (firstWs && firstWs['!ref']) {
+        const range = XLSX.utils.decode_range(firstWs['!ref']);
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const cell = firstWs[XLSX.utils.encode_cell({ r: range.s.r, c })];
+          firstHeaders.push(cell ? String(cell.v) : '');
+        }
+      }
 
-      const total = parsedSheets.reduce((s, sh) => s + sh.gameKeys.length, 0);
+      showColPicker(firstHeaders, (colIdx) => {
+        gameKeyColIdx = colIdx;
+        parsedSheets = []; sheetConfigs = {}; selectedSheet = null; editLevels = [];
+        currentFileName = file.name.replace(/\.[^.]+$/, '');
 
-      document.getElementById('app-title').textContent = currentFileName;
-      document.getElementById('app-meta').textContent  = `${parsedSheets.length}개 시트 · GameKey ${total.toLocaleString()}개`;
+        for (const name of wb.SheetNames) parsedSheets.push(parseSheet(name, wb.Sheets[name]));
 
-      clearLog(); renderSidebar(); updateExportPanel();
-      document.getElementById('app-screen').classList.add('visible');
-      document.getElementById('main-empty').style.display = 'flex';
-      document.getElementById('main-content').classList.remove('visible');
+        const total = parsedSheets.reduce((s, sh) => s + sh.gameKeys.length, 0);
+        const colLabel = firstHeaders[colIdx] || `열${colIdx + 1}`;
 
-      const first = parsedSheets.find(s => s.gameKeys.length > 0);
-      if (first) selectSheet(first.name);
+        document.getElementById('app-title').textContent = currentFileName;
+        document.getElementById('app-meta').textContent  = `${parsedSheets.length}개 시트 · GameKey(${colLabel}) ${total.toLocaleString()}개`;
+
+        clearLog(); renderSidebar(); updateExportPanel();
+        document.getElementById('app-screen').classList.add('visible');
+        document.getElementById('main-empty').style.display = 'flex';
+        document.getElementById('main-content').classList.remove('visible');
+
+        const first = parsedSheets.find(s => s.gameKeys.length > 0);
+        if (first) selectSheet(first.name);
+      });
+    }
+
+    // ── COLUMN PICKER ──
+    function showColPicker(headers, onConfirm) {
+      const colsDiv    = document.getElementById('col-picker-cols');
+      const confirmBtn = document.getElementById('col-picker-confirm');
+      const backdrop   = document.getElementById('col-picker-backdrop');
+
+      colsDiv.innerHTML = '';
+      confirmBtn.disabled = true;
+      let selectedIdx = null;
+
+      headers.forEach((h, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'col-picker-btn';
+        const letter = colIdxToLetter(i);
+        btn.innerHTML = `${h || `열${i+1}`}<span class="col-letter">${letter}열</span>`;
+        btn.title = `${i+1}번째 열`;
+        btn.addEventListener('click', () => {
+          colsDiv.querySelectorAll('.col-picker-btn').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          selectedIdx = i;
+          confirmBtn.disabled = false;
+        });
+        // 기본값: 두 번째 열(index 1) 자동 선택
+        if (i === (headers.length > 1 ? 1 : 0)) {
+          btn.classList.add('selected');
+          selectedIdx = i;
+          confirmBtn.disabled = false;
+        }
+        colsDiv.appendChild(btn);
+      });
+
+      confirmBtn.onclick = () => {
+        if (selectedIdx === null) return;
+        backdrop.classList.remove('show');
+        onConfirm(selectedIdx);
+      };
+
+      backdrop.classList.add('show');
+    }
+
+    function colIdxToLetter(idx) {
+      let col = idx + 1, result = '';
+      while (col > 0) { col--; result = String.fromCharCode(65 + (col % 26)) + result; col = Math.floor(col / 26); }
+      return result;
     }
 
     function parseSheet(name, ws) {
@@ -582,7 +717,7 @@
         }
         if (hasData) rows.push(row);
       }
-      const gameKeys = rows.map(r => (r[1] || '').trim()).filter(k => k !== '');
+      const gameKeys = rows.map(r => (r[gameKeyColIdx] || '').trim()).filter(k => k !== '');
       return { name, headers, rows, gameKeys };
     }
 
@@ -664,8 +799,9 @@
 
       for (const sheet of parsedSheets) {
         const cfg = sheetConfigs[sheet.name], noKeys = sheet.gameKeys.length === 0, active = selectedSheet === sheet.name;
+        const held = !noKeys && heldSheets.has(sheet.name);
         const item = document.createElement('div');
-        item.className = 'sidebar-item' + (noKeys ? ' no-keys' : '') + (cfg ? ' configured' : '') + (active ? ' active' : '');
+        item.className = 'sidebar-item' + (noKeys ? ' no-keys' : '') + (cfg ? ' configured' : '') + (active ? ' active' : '') + (held ? ' held' : '');
         const icon = document.createElement('span');
         icon.className = 'sidebar-icon';
         icon.textContent = noKeys ? '—' : cfg ? '✓' : '○';
@@ -677,7 +813,19 @@
         else          meta.textContent = `${sheet.gameKeys.length.toLocaleString()}개`;
         info.appendChild(nameEl); info.appendChild(meta);
         item.appendChild(icon); item.appendChild(info);
-        if (!noKeys) item.addEventListener('click', () => selectSheet(sheet.name));
+        if (!noKeys) {
+          const cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.className = 'hold-checkbox';
+          cb.checked = held; cb.title = '정렬 보류';
+          cb.addEventListener('click', e => e.stopPropagation());
+          cb.addEventListener('change', () => {
+            if (cb.checked) heldSheets.add(sheet.name); else heldSheets.delete(sheet.name);
+            renderSidebar();
+            if (selectedSheet === sheet.name) updateHoldBanner();
+          });
+          item.appendChild(cb);
+          item.addEventListener('click', () => selectSheet(sheet.name));
+        }
         list.appendChild(item);
       }
     }
@@ -695,10 +843,24 @@
       document.getElementById('config-sheet-subtitle').textContent = `GameKey ${sheet.gameKeys.length.toLocaleString()}개`;
       document.getElementById('main-empty').style.display = 'none';
       document.getElementById('main-content').classList.add('visible');
+      updateHoldBanner();
       renderConfigArea();
       if (existing) renderPreviewArea(name);
       else document.getElementById('preview-area').classList.remove('visible');
     }
+
+    // ── HOLD BANNER ──
+    function updateHoldBanner() {
+      const banner = document.getElementById('hold-banner');
+      if (selectedSheet && heldSheets.has(selectedSheet)) {
+        banner.classList.add('visible');
+      } else {
+        banner.classList.remove('visible');
+      }
+    }
+    document.getElementById('hold-banner-release').addEventListener('click', () => {
+      if (selectedSheet) { heldSheets.delete(selectedSheet); renderSidebar(); updateHoldBanner(); }
+    });
 
     // ── CONFIG AREA ──
     function renderConfigArea() {
@@ -765,66 +927,213 @@
             inputDiv.appendChild(samplesEl); card.appendChild(inputDiv);
 
             const stepDiv = document.createElement('div'); stepDiv.className = 'step-block';
-            const delimRow = document.createElement('div'); delimRow.className = 'delim-row';
-            delimRow.innerHTML = `<span class="step-arrow">↓</span><span class="step-op-label">split by</span>`;
-            const delimIn = document.createElement('input'); delimIn.className = 'delim-mini'; delimIn.type = 'text'; delimIn.value = step.delimiter; delimIn.maxLength = 5;
-            delimIn.addEventListener('change', () => { step.delimiter = delimIn.value || step.delimiter; step.position = null; level.values = null; for (let k = si+1; k < level.steps.length; k++) level.steps[k].position = null; renderConfigArea(); });
-            delimRow.appendChild(delimIn);
+
+            // ── 추출 방식 토글 + 삭제 버튼 ──
+            const modeRow = document.createElement('div'); modeRow.className = 'step-mode-row';
+            modeRow.innerHTML = `<span class="step-arrow">↓</span><span class="step-op-label">추출 방식</span>`;
+            const isRegexStep = step.type === 'regex';
+            ['split','regex'].forEach(m => {
+              const btn = document.createElement('button');
+              btn.className = 'step-mode-btn' + ((!isRegexStep && m==='split') || (isRegexStep && m==='regex') ? ' active' : '');
+              btn.textContent = m === 'split' ? '구분자 분리' : '패턴 추출';
+              btn.addEventListener('click', () => {
+                if (step.type === m) return;
+                step.type = m; step.position = null; level.values = null;
+                for (let k=si+1; k<level.steps.length; k++) level.steps[k].position = null;
+                renderConfigArea();
+              });
+              modeRow.appendChild(btn);
+            });
             if (si > 0) {
               const rmBtn = document.createElement('button'); rmBtn.className = 'step-remove-btn'; rmBtn.textContent = '단계 삭제';
               rmBtn.addEventListener('click', () => { level.steps.splice(si,1); level.values = null; for (let k=si; k<level.steps.length; k++) level.steps[k].position=null; renderConfigArea(); });
-              delimRow.appendChild(rmBtn);
+              modeRow.appendChild(rmBtn);
             }
-            stepDiv.appendChild(delimRow);
+            stepDiv.appendChild(modeRow);
 
-            const tokenized = sampleUniq.map(v => String(v).split(step.delimiter));
-            const maxCols   = tokenized.reduce((m, t) => Math.max(m, t.length), 0);
-            if (maxCols > 0) {
-              const wrap = document.createElement('div'); wrap.className = 'token-table-wrap';
-              const table = document.createElement('table');
-              const thead = document.createElement('thead'); const hrow = document.createElement('tr');
-              for (let c = 0; c < maxCols; c++) {
-                const th = document.createElement('th'); th.textContent = `${c+1}번째`;
-                if (step.position === c) th.classList.add('selected');
-                th.addEventListener('click', () => { step.position = c; level.values = null; for (let k=si+1; k<level.steps.length; k++) level.steps[k].position=null; renderConfigArea(); });
-                hrow.appendChild(th);
-              }
-              for (let e = 1; e <= END_COLS; e++) {
-                const th = document.createElement('th'); th.textContent = `끝[${e}]`; th.classList.add('th-end'); th.title = `뒤에서 ${e}번째`;
-                if (step.position === -e) th.classList.add('selected');
-                th.addEventListener('click', () => { step.position = -e; level.values = null; for (let k=si+1; k<level.steps.length; k++) level.steps[k].position=null; renderConfigArea(); });
-                hrow.appendChild(th);
-              }
-              thead.appendChild(hrow); table.appendChild(thead);
-              const tbody = document.createElement('tbody');
-              tokenized.forEach(tokens => {
-                const tr = document.createElement('tr');
+            if (!isRegexStep) {
+              // ── 구분자 분리 모드 ──
+              const delimRow = document.createElement('div'); delimRow.className = 'delim-row';
+              delimRow.innerHTML = `<span class="step-op-label">split by</span>`;
+              const delimIn = document.createElement('input'); delimIn.className = 'delim-mini'; delimIn.type = 'text'; delimIn.value = step.delimiter ?? ','; delimIn.maxLength = 5;
+              delimIn.addEventListener('change', () => { step.delimiter = delimIn.value || step.delimiter; step.position = null; level.values = null; for (let k = si+1; k < level.steps.length; k++) level.steps[k].position = null; renderConfigArea(); });
+              delimRow.appendChild(delimIn);
+              stepDiv.appendChild(delimRow);
+
+              const tokenized = sampleUniq.map(v => String(v).split(step.delimiter ?? ','));
+              const maxCols   = tokenized.reduce((m, t) => Math.max(m, t.length), 0);
+              if (maxCols > 0) {
+                const wrap = document.createElement('div'); wrap.className = 'token-table-wrap';
+                const table = document.createElement('table');
+                const thead = document.createElement('thead'); const hrow = document.createElement('tr');
                 for (let c = 0; c < maxCols; c++) {
-                  const td = document.createElement('td');
-                  if (tokens[c] !== undefined) { td.textContent = tokens[c].length > 45 ? tokens[c].slice(0,42)+'…' : tokens[c]; if (step.position === c) td.classList.add('selected'); }
-                  else { td.textContent = '—'; td.classList.add('empty'); }
-                  tr.appendChild(td);
+                  const th = document.createElement('th'); th.textContent = `${c+1}번째`;
+                  if (step.position === c) th.classList.add('selected');
+                  th.addEventListener('click', () => { step.position = c; level.values = null; for (let k=si+1; k<level.steps.length; k++) level.steps[k].position=null; renderConfigArea(); });
+                  hrow.appendChild(th);
                 }
                 for (let e = 1; e <= END_COLS; e++) {
-                  const td = document.createElement('td'); td.classList.add('td-end');
-                  const endIdx = tokens.length - e;
-                  if (endIdx >= 0) { const v = tokens[endIdx]; td.textContent = v.length > 45 ? v.slice(0,42)+'…' : v; if (step.position === -e) td.classList.add('selected'); }
-                  else { td.textContent = '—'; td.classList.add('empty'); }
-                  tr.appendChild(td);
+                  const th = document.createElement('th'); th.textContent = `끝[${e}]`; th.classList.add('th-end'); th.title = `뒤에서 ${e}번째`;
+                  if (step.position === -e) th.classList.add('selected');
+                  th.addEventListener('click', () => { step.position = -e; level.values = null; for (let k=si+1; k<level.steps.length; k++) level.steps[k].position=null; renderConfigArea(); });
+                  hrow.appendChild(th);
                 }
-                tbody.appendChild(tr);
+                thead.appendChild(hrow); table.appendChild(thead);
+                const tbody = document.createElement('tbody');
+                tokenized.forEach(tokens => {
+                  const tr = document.createElement('tr');
+                  for (let c = 0; c < maxCols; c++) {
+                    const td = document.createElement('td');
+                    if (tokens[c] !== undefined) { td.textContent = tokens[c].length > 45 ? tokens[c].slice(0,42)+'…' : tokens[c]; if (step.position === c) td.classList.add('selected'); }
+                    else { td.textContent = '—'; td.classList.add('empty'); }
+                    tr.appendChild(td);
+                  }
+                  for (let e = 1; e <= END_COLS; e++) {
+                    const td = document.createElement('td'); td.classList.add('td-end');
+                    const endIdx = tokens.length - e;
+                    if (endIdx >= 0) { const v = tokens[endIdx]; td.textContent = v.length > 45 ? v.slice(0,42)+'…' : v; if (step.position === -e) td.classList.add('selected'); }
+                    else { td.textContent = '—'; td.classList.add('empty'); }
+                    tr.appendChild(td);
+                  }
+                  tbody.appendChild(tr);
+                });
+                table.appendChild(tbody); wrap.appendChild(table); stepDiv.appendChild(wrap);
+              }
+            } else {
+              // ── 패턴 추출 모드 ──
+              const PRESETS = [
+                { label: '첫 카테고리', desc: 'Caption_, CAPTION_, 언더스코어 뒤 첫 단어 (없으면 전체 반환)', pattern: '_([^_]+)', group: 1, fallback: true },
+                { label: '에피소드+퀘스트', desc: 'EP02_Q010, EP02_AL01, EP03_TWS 등 — Title/Summary/Desc 세트 묶기용 (EP계열)', pattern: '(EP\\d+_[A-Za-z0-9]+)', group: 1, fallback: true },
+                { label: '에피소드',  desc: 'EP01, EP02, EP03 등 에피소드 번호',              pattern: '(EP\\d+)',            group: 1 },
+                { label: '씬코드',    desc: 'GH0200, AMB0040, TWS0100 등 (영문+숫자 코드)',  pattern: '([A-Z]{2,}\\d{3,})', group: 1 },
+                { label: '마지막 숫자', desc: '끝의 숫자 (_01, _05 등)',                      pattern: '_(\\d+)(?:_[^_]*)?$', group: 1 },
+                { label: '공통 식별자', desc: 'Name_X / Desc_X 쌍 묶기 — 첫 단어 제거 후 나머지 (Name/Desc 세트용)', pattern: '^[^_]+_(.+)$', group: 1 },
+                { label: 'SNF 노드 ID', desc: '_SNF_F1, _SNF_N3, _SNF_NotUse 등 — SNF 이후 노드 식별자 추출', pattern: '_SNF_([A-Za-z]+\\d*)', group: 1 },
+                { label: 'Level 번호', desc: '_Level_1, _Level_2 등 — Level 번호 추출 (없으면 빈 문자열 → 베이스 항목이 먼저)', pattern: '_Level_(\\d+)', group: 1 },
+                { label: '스킬 ID', desc: '.Name. / .SkillDesc. / .SysDesc. 이후 스킬 ID 추출 — Name↔Desc 세트 묶기용', pattern: '\\.(?:Name|SkillDesc|SysDesc)\\.(.+)$', group: 1 },
+                { label: '스킬 타입', desc: '.Name. / .SkillDesc. / .SysDesc. 타입 추출 → custom 정렬로 순서 지정', pattern: '\\.(Name|SkillDesc|SysDesc)\\.', group: 1 },
+              ];
+
+              // 프리셋 버튼 행
+              const presetRow = document.createElement('div'); presetRow.className = 'regex-preset-row';
+              const presetLbl = document.createElement('span'); presetLbl.className = 'step-op-label'; presetLbl.textContent = '추출 대상';
+              presetRow.appendChild(presetLbl);
+              let activeDesc = '';
+              PRESETS.forEach(preset => {
+                const btn = document.createElement('button'); btn.className = 'regex-preset-btn';
+                btn.textContent = preset.label; btn.title = preset.desc;
+                const isActive = step.pattern === preset.pattern && (step.group ?? 1) === preset.group;
+                if (isActive) { btn.classList.add('active'); activeDesc = preset.desc; }
+                btn.addEventListener('click', () => {
+                  step.pattern = preset.pattern; step.group = preset.group;
+                  step.fallback = preset.fallback ?? false;
+                  step._showAdv = false; level.values = null;
+                  for (let k=si+1; k<level.steps.length; k++) level.steps[k].position = null;
+                  renderConfigArea();
+                });
+                presetRow.appendChild(btn);
               });
-              table.appendChild(tbody); wrap.appendChild(table); stepDiv.appendChild(wrap);
+              stepDiv.appendChild(presetRow);
+              if (activeDesc) {
+                const descEl = document.createElement('div'); descEl.className = 'regex-preset-desc';
+                descEl.textContent = '→ ' + activeDesc; stepDiv.appendChild(descEl);
+              }
+
+              // 고급: 직접 입력 토글
+              const isCustom = !!step.pattern && !PRESETS.some(p => p.pattern === step.pattern);
+              const showAdv = !!(step._showAdv || isCustom);
+              const advToggle = document.createElement('button'); advToggle.className = 'regex-adv-toggle';
+              advToggle.textContent = showAdv ? '▲ 직접 입력 숨기기' : '▼ 직접 입력 (고급)';
+              advToggle.addEventListener('click', () => { step._showAdv = !showAdv; renderConfigArea(); });
+              stepDiv.appendChild(advToggle);
+
+              if (showAdv) {
+                const regexRow = document.createElement('div'); regexRow.className = 'regex-input-row';
+                const patternIn = document.createElement('input');
+                patternIn.className = 'regex-input'; patternIn.type = 'text';
+                patternIn.placeholder = '정규식 패턴 — 예: ([A-Z]{2,}\\d{3,})';
+                patternIn.value = step.pattern ?? ''; patternIn.spellcheck = false;
+                const grpSel = document.createElement('select'); grpSel.className = 'regex-group-sel'; grpSel.title = '캡처 그룹 (0=전체)';
+                [['0','전체'], ['1','그룹1'], ['2','그룹2'], ['3','그룹3']].forEach(([val, txt]) => {
+                  const opt = document.createElement('option'); opt.value = val; opt.textContent = txt;
+                  if (+val === (step.group ?? 1)) opt.selected = true;
+                  grpSel.appendChild(opt);
+                });
+                let regexTimer;
+                const applyRegex = () => {
+                  step.pattern = patternIn.value; step.group = +grpSel.value; level.values = null;
+                  for (let k=si+1; k<level.steps.length; k++) level.steps[k].position = null;
+                  renderConfigArea();
+                };
+                patternIn.addEventListener('input', () => { clearTimeout(regexTimer); regexTimer = setTimeout(applyRegex, 400); });
+                grpSel.addEventListener('change', applyRegex);
+                regexRow.appendChild(patternIn); regexRow.appendChild(grpSel);
+                stepDiv.appendChild(regexRow);
+              }
+
+              // ── fallback 옵션 ──
+              const fallbackRow = document.createElement('div');
+              fallbackRow.style.cssText = 'margin-bottom:6px;';
+              const fallbackLbl = document.createElement('label');
+              fallbackLbl.style.cssText = 'font-size:11px;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;';
+              const fallbackChk = document.createElement('input');
+              fallbackChk.type = 'checkbox'; fallbackChk.checked = !!step.fallback;
+              fallbackChk.addEventListener('change', () => {
+                step.fallback = fallbackChk.checked; level.values = null;
+                for (let k=si+1; k<level.steps.length; k++) level.steps[k].position = null;
+                renderConfigArea();
+              });
+              fallbackLbl.appendChild(fallbackChk);
+              fallbackLbl.appendChild(document.createTextNode('매치 실패 시 원본 반환'));
+              fallbackRow.appendChild(fallbackLbl);
+              stepDiv.appendChild(fallbackRow);
+
+              // 추출 결과 미리보기
+              if (step.pattern) {
+                const previewWrap = document.createElement('div'); previewWrap.className = 'sample-vals';
+                try {
+                  const re = new RegExp(step.pattern); const grp = step.group ?? 1;
+                  sampleUniq.forEach(v => {
+                    const m = re.exec(String(v)); const ex = m ? (grp > 0 && m[grp] !== undefined ? m[grp] : m[0]) : null;
+                    const s = document.createElement('span');
+                    const isFallback = ex === null && step.fallback;
+                    s.className = (ex !== null || isFallback) ? 'regex-match-val' : 'regex-match-val no-match';
+                    if (isFallback) s.style.opacity = '0.65';
+                    s.textContent = `${v.length > 34 ? v.slice(0,32)+'…' : v}  →  ${ex !== null ? ex : isFallback ? `(원본: ${v.length > 20 ? v.slice(0,18)+'…' : v})` : '(불일치)'}`;
+                    previewWrap.appendChild(s);
+                  });
+                  stepDiv.appendChild(previewWrap);
+                } catch(e) {
+                  const errEl = document.createElement('div'); errEl.className = 'regex-error';
+                  errEl.textContent = '패턴 오류: ' + e.message; errEl.style.color = 'var(--danger)';
+                  stepDiv.appendChild(errEl);
+                }
+              } else {
+                const hint = document.createElement('div'); hint.className = 'regex-error';
+                hint.style.color = 'var(--text-muted)'; hint.textContent = '위에서 추출 대상을 선택하면 샘플 결과가 표시됩니다';
+                stepDiv.appendChild(hint);
+              }
             }
+
             card.appendChild(stepDiv);
-            if (step.position === null) prevComplete = false;
+            if (step.type === 'regex' ? !step.pattern : step.position === null) prevComplete = false;
           }
 
           if (prevComplete) {
             const allExtracted = uniqueOrdered(flowValues(gks, level.steps, level.steps.length));
             if (level._customOrder !== undefined) {
-              // 텍스트박스로 직접 입력한 경우
-              level.values = level._customOrder.split('\n').map(s => s.trim()).filter(Boolean);
+              if (!level.values) {
+                // 단계 추가/변경으로 재추출 발생: 기존 순서 유지하면서 새 값 머지
+                const customList = level._customOrder.split('\n').map(s => s.trim()).filter(Boolean);
+                const newSet = new Set(allExtracted);
+                const kept  = customList.filter(v => newSet.has(v));           // 기존 순서 유지
+                const added = allExtracted.filter(v => !customList.includes(v)); // 새 값은 뒤에 추가
+                level.values = [...kept, ...added];
+                level._customOrder = level.values.join('\n');
+              } else {
+                // 일반 재렌더: 텍스트박스 입력값 반영
+                level.values = level._customOrder.split('\n').map(s => s.trim()).filter(Boolean);
+              }
             } else if (!level.values) {
               // 처음 추출
               level.values = allExtracted;
@@ -897,7 +1206,9 @@
                   e.preventDefault(); const it = e.target.closest('.reorder-item');
                   if (!it || dragSrcIdx === null) return;
                   const dest = +it.dataset.idx; if (dragSrcIdx === dest) return;
-                  const [moved] = level.values.splice(dragSrcIdx, 1); level.values.splice(dest, 0, moved); renderConfigArea();
+                  const [moved] = level.values.splice(dragSrcIdx, 1); level.values.splice(dest, 0, moved);
+                  level._customOrder = level.values.join('\n'); // 순서 변경 즉시 저장
+                  renderConfigArea();
                 });
                 reorderSection.appendChild(list);
               }
@@ -945,7 +1256,7 @@
       hrow.appendChild(thSort);
       sheet.headers.forEach((h, i) => {
         const th = document.createElement('th'); th.textContent = h || `열${i+1}`;
-        if (i === 1) { th.className = 'th-gamekey'; th.style.width = '320px'; } else { th.style.width = '110px'; }
+        if (i === gameKeyColIdx) { th.className = 'th-gamekey'; th.style.width = '320px'; } else { th.style.width = '110px'; }
         hrow.appendChild(th);
       });
       thead.appendChild(hrow); table.appendChild(thead);
@@ -957,13 +1268,13 @@
         const tdSort = document.createElement('td');
         const tagsDiv = document.createElement('div'); tagsDiv.className = 'sort-key-tags';
         cfg.levels.forEach(level => {
-          const val = extractValue(row[1] || '', level.steps);
+          const val = extractValue(row[gameKeyColIdx] || '', level.steps);
           const tag = document.createElement('span');
           tag.className = 'sort-key-tag' + (level.values.includes(val) ? '' : ' unknown');
           tag.textContent = val || '?'; tagsDiv.appendChild(tag);
         });
         tdSort.appendChild(tagsDiv); tr.appendChild(tdSort);
-        row.forEach((cell, i) => { const td = document.createElement('td'); td.textContent = cell; if (i===1) td.className='td-gamekey'; tr.appendChild(td); });
+        row.forEach((cell, i) => { const td = document.createElement('td'); td.textContent = cell; if (i===gameKeyColIdx) td.className='td-gamekey'; tr.appendChild(td); });
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
@@ -990,14 +1301,29 @@
 
     function extractValue(gk, steps) {
       let val = gk;
-      for (const { delimiter, position } of steps) {
-        const parts = String(val).split(delimiter);
-        if (position !== null && position <= -BASE_OFFSET) {
-          const excludeN = -(position + BASE_OFFSET);
-          val = excludeN > 0 && excludeN < parts.length ? parts.slice(0, -excludeN).join(delimiter) : val;
+      for (const step of steps) {
+        if (step.type === 'regex') {
+          try {
+            const re = new RegExp(step.pattern || '');
+            const m = re.exec(String(val));
+            const grp = step.group ?? 1;
+            if (m) {
+              val = grp > 0 && m[grp] !== undefined ? m[grp] : m[0];
+            } else if (!step.fallback) {
+              val = '';
+            }
+            // step.fallback && !m → val 그대로 유지 (원본 반환)
+          } catch { val = ''; }
         } else {
-          const idx = position < 0 ? parts.length + position : position;
-          val = (parts[idx] !== undefined) ? parts[idx] : '';
+          const { delimiter, position } = step;
+          const parts = String(val).split(delimiter ?? ',');
+          if (position !== null && position <= -BASE_OFFSET) {
+            const excludeN = -(position + BASE_OFFSET);
+            val = excludeN > 0 && excludeN < parts.length ? parts.slice(0, -excludeN).join(delimiter) : val;
+          } else {
+            const idx = position < 0 ? parts.length + position : position;
+            val = (parts[idx] !== undefined) ? parts[idx] : '';
+          }
         }
         if (!val) break;
       }
@@ -1008,47 +1334,64 @@
     function sortedRowsForPreview(sheet, cfg) {
       return [...sheet.rows].sort((a, b) => {
         for (const level of cfg.levels) {
-          const va = extractValue(a[1]||'', level.steps), vb = extractValue(b[1]||'', level.steps);
+          const va = extractValue(a[gameKeyColIdx]||'', level.steps), vb = extractValue(b[gameKeyColIdx]||'', level.steps);
           if (level.mode === 'alpha') { const c = naturalCompare(va, vb); if (c !== 0) return c; }
           else { const ia=level.values.indexOf(va), ib=level.values.indexOf(vb); const oa=ia===-1?9999:ia, ob=ib===-1?9999:ib; if (oa!==ob) return oa-ob; }
         }
-        return naturalCompare(a[1]||'', b[1]||'');
+        return naturalCompare(a[gameKeyColIdx]||'', b[gameKeyColIdx]||'');
       });
     }
     function sortRows(rows, levels) {
       return [...rows].sort((a, b) => {
         for (const level of levels) {
-          const va = extractValue(a[1]||'', level.steps), vb = extractValue(b[1]||'', level.steps);
+          const va = extractValue(a[gameKeyColIdx]||'', level.steps), vb = extractValue(b[gameKeyColIdx]||'', level.steps);
           if (level.mode === 'alpha') { const c = naturalCompare(va, vb); if (c !== 0) return c; }
           else { const ia=level.values.indexOf(va), ib=level.values.indexOf(vb); const oa=ia===-1?9999:ia, ob=ib===-1?9999:ib; if (oa!==ob) return oa-ob; }
         }
-        return naturalCompare(a[1]||'', b[1]||'');
+        return naturalCompare(a[gameKeyColIdx]||'', b[gameKeyColIdx]||'');
       });
     }
 
     function flowValues(gameKeys, steps, upToStep) {
       let vals = gameKeys.slice();
       for (let i = 0; i < upToStep; i++) {
-        const { delimiter, position } = steps[i]; if (position === null) return vals;
-        const next = [];
-        for (const v of vals) {
-          const p = String(v).split(delimiter);
-          let ex;
-          if (position <= -BASE_OFFSET) {
-            const excludeN = -(position + BASE_OFFSET);
-            ex = excludeN > 0 && excludeN < p.length ? p.slice(0, -excludeN).join(delimiter) : v;
-          } else {
-            const idx = position < 0 ? p.length + position : position;
-            ex = p[idx] !== undefined ? p[idx] : '';
+        const step = steps[i];
+        if (step.type === 'regex') {
+          if (!step.pattern) return vals;
+          try {
+            const re = new RegExp(step.pattern);
+            const grp = step.group ?? 1;
+            const next = [];
+            for (const v of vals) {
+              const m = re.exec(String(v));
+              if (m) { const ex = grp > 0 && m[grp] !== undefined ? m[grp] : m[0]; if (ex) next.push(ex); }
+              else if (step.fallback && v) next.push(v); // 매치 실패 시 원본 반환
+            }
+            vals = next;
+          } catch { return vals; }
+        } else {
+          const { delimiter, position } = step;
+          if (position === null) return vals;
+          const next = [];
+          for (const v of vals) {
+            const p = String(v).split(delimiter ?? ',');
+            let ex;
+            if (position <= -BASE_OFFSET) {
+              const excludeN = -(position + BASE_OFFSET);
+              ex = excludeN > 0 && excludeN < p.length ? p.slice(0, -excludeN).join(delimiter) : v;
+            } else {
+              const idx = position < 0 ? p.length + position : position;
+              ex = p[idx] !== undefined ? p[idx] : '';
+            }
+            if (ex) next.push(ex);
           }
-          if (ex) next.push(ex);
+          vals = next;
         }
-        vals = next;
       }
       return vals;
     }
     function uniqueOrdered(vals) { const seen = new Set(), result = []; for (const v of vals) { if (!seen.has(v)) { seen.add(v); result.push(v); } } return result; }
-    function isLevelComplete(level) { return level.steps.length > 0 && level.steps.every(s => s.position !== null); }
+    function isLevelComplete(level) { return level.steps.length > 0 && level.steps.every(s => s.type === 'regex' ? !!s.pattern : s.position !== null); }
 
     // ── SORT & DOWNLOAD ──
     async function runSortAndDownload() {
@@ -1057,9 +1400,10 @@
       logSort('정렬 시작...', 'info');
       try {
         const buf = await xlsxFile.arrayBuffer();
-        const wb  = XLSX.read(new Uint8Array(buf), { type: 'array' });
+        const wb  = XLSX.read(new Uint8Array(buf), { type: 'array', sheetStubs: true });
         let sorted = 0, skipped = 0;
         for (const sheetName of wb.SheetNames) {
+          if (heldSheets.has(sheetName)) { logSort(`⏸  [${sheetName}]  정렬 보류 — 스킵`, 'warn'); skipped++; continue; }
           const rule = sheetConfigs[sheetName];
           if (!rule) { logSort(`⟳  [${sheetName}]  규칙 없음 — 스킵`, 'warn'); skipped++; continue; }
           const ws = wb.Sheets[sheetName];
@@ -1070,6 +1414,20 @@
           logSort(`✓  [${sheetName}]  ${dataRows.length}행 정렬 완료`, 'ok'); sorted++;
         }
         logSort('', 'info'); logSort(`완료 — ${sorted}개 시트 정렬, ${skipped}개 스킵`, 'ok');
+        // _x000d_ 후처리: 셀 값의 _x000d_ 리터럴을 실제 줄바꿈으로 치환
+        wb.SheetNames.forEach(name => {
+          const ws = wb.Sheets[name];
+          Object.values(ws).forEach(cell => {
+            if (cell && typeof cell.v === 'string') {
+              // \r 문자 제거 (강제엔터 \n은 유지, \r\n → \n)
+              cell.v = cell.v.replace(/\r/g, '');
+              // SheetJS가 \r을 _x000d_ 리터럴로 저장한 경우도 처리
+              cell.v = cell.v.replace(/_x000d_/gi, '\n');
+              if (cell.h) cell.h = cell.h.replace(/\r/g, '').replace(/_x000d_/gi, '\n');
+            }
+          });
+        });
+        const xlsxWriteOpts = { bookType: 'xlsx', type: 'array', bookSST: true, cellStyles: true };
         const suggestedName = `${currentFileName}_sorted.xlsx`;
         if ('showSaveFilePicker' in window) {
           try {
@@ -1077,16 +1435,16 @@
               suggestedName,
               types: [{ description: 'Excel 파일', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }]
             });
-            const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const wbOut = XLSX.write(wb, xlsxWriteOpts);
             const writable = await handle.createWritable();
             await writable.write(new Blob([wbOut], { type: 'application/octet-stream' }));
             await writable.close();
             showToast('다운로드가 완료되었습니다.');
           } catch (e) {
-            if (e.name !== 'AbortError') { XLSX.writeFile(wb, suggestedName); showToast('다운로드가 완료되었습니다.'); } // 오류 시 폴백
+            if (e.name !== 'AbortError') { XLSX.writeFile(wb, suggestedName, { bookSST: true, cellStyles: true }); showToast('다운로드가 완료되었습니다.'); } // 오류 시 폴백
           }
         } else {
-          XLSX.writeFile(wb, suggestedName);
+          XLSX.writeFile(wb, suggestedName, { bookSST: true, cellStyles: true });
           showToast('다운로드가 완료되었습니다.');
         }
       } catch (err) { logSort('오류: ' + err.message, 'err'); }
@@ -1176,11 +1534,36 @@
         lines.push(`' ${'─'.repeat(60)}`, `' [시트: ${sheet.name}]`, `' ${'─'.repeat(60)}`, ``);
         cfg.levels.forEach((level, li) => {
           const idx = li + 1;
+          const hasRegexStep = level.steps.some(s => s.type === 'regex');
+          const regexCount   = level.steps.filter(s => s.type === 'regex').length;
           lines.push(`' 정렬 기준 ${idx} — ${level.mode==='alpha'?'알파벳 자동 정렬':'직접 순서 지정'}`, `Function SST_${safe}_L${idx}_Extract(gameKey As String) As String`, `    Dim v As String: v = gameKey`, `    Dim p() As String`);
-          level.steps.forEach(({ delimiter, position }) => {
-            const d = delimiter.replace(/"/g,'""');
-            if (position < 0) { lines.push(`    p = Split(v, "${d}"): If UBound(p) < ${-position} Then SST_${safe}_L${idx}_Extract = "": Exit Function`, `    v = p(UBound(p) - ${-position-1})`); }
-            else               { lines.push(`    p = Split(v, "${d}"): If UBound(p) < ${position} Then SST_${safe}_L${idx}_Extract = "": Exit Function`, `    v = p(${position})`); }
+          if (hasRegexStep) {
+            for (let ri = 1; ri <= regexCount; ri++) lines.push(`    Dim re${ri} As Object, m${ri} As Object`);
+          }
+          let rCount = 0;
+          level.steps.forEach(step => {
+            if (step.type === 'regex') {
+              rCount++;
+              const pat = (step.pattern || '').replace(/"/g, '""');
+              const grp = step.group ?? 1;
+              lines.push(`    Set re${rCount} = CreateObject("VBScript.RegExp")`, `    re${rCount}.Pattern = "${pat}"`, `    re${rCount}.Global = False`, `    Set m${rCount} = re${rCount}.Execute(v)`);
+              if (step.fallback) {
+                // 매치 실패 시 v 그대로 유지 (fallback)
+                lines.push(`    If m${rCount}.Count > 0 Then`);
+                if (grp === 0) lines.push(`        v = m${rCount}(0).Value`);
+                else           lines.push(`        v = m${rCount}(0).SubMatches(${grp - 1})`);
+                lines.push(`    End If`);
+              } else {
+                lines.push(`    If m${rCount}.Count = 0 Then SST_${safe}_L${idx}_Extract = "": Exit Function`);
+                if (grp === 0) lines.push(`    v = m${rCount}(0).Value`);
+                else           lines.push(`    v = m${rCount}(0).SubMatches(${grp - 1})`);
+              }
+            } else {
+              const { delimiter, position } = step;
+              const d = (delimiter ?? ',').replace(/"/g,'""');
+              if (position < 0) { lines.push(`    p = Split(v, "${d}"): If UBound(p) < ${-position} Then SST_${safe}_L${idx}_Extract = "": Exit Function`, `    v = p(UBound(p) - ${-position-1})`); }
+              else               { lines.push(`    p = Split(v, "${d}"): If UBound(p) < ${position} Then SST_${safe}_L${idx}_Extract = "": Exit Function`, `    v = p(${position})`); }
+            }
           });
           lines.push(`    SST_${safe}_L${idx}_Extract = v`, `End Function`, ``);
           if (level.mode === 'custom') {
@@ -1194,7 +1577,9 @@
           const idx = li+1;
           lines.push(level.mode==='alpha' ? `    k = k & SST_PadStr(SST_${safe}_L${idx}_Extract(gameKey), 80) & Chr(1)` : `    k = k & Format(SST_${safe}_L${idx}_Order(gameKey), "00000") & Chr(1)`);
         });
-        lines.push(`    SST_${safe}_SortKey = k`, `End Function`, ``, `Sub SST_Sort_${safe}(ws As Worksheet)`, `    Dim lastRow As Long`, `    lastRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row`, `    If lastRow <= 1 Then Exit Sub`, `    Dim hCol As Long`, `    hCol = ws.UsedRange.Column + ws.UsedRange.Columns.Count`, `    Dim i As Long`, `    For i = 2 To lastRow`, `        If Trim(CStr(ws.Cells(i, 2).Value)) <> "" Then`, `            ws.Cells(i, hCol).Value = SST_${safe}_SortKey(CStr(ws.Cells(i, 2).Value))`, `        End If`, `    Next i`, `    ws.UsedRange.Sort Key1:=ws.Cells(1, hCol), Order1:=xlAscending, Header:=xlYes`, `    ws.Columns(hCol).Delete`, `End Sub`, ``);
+        const gkLetter = colIdxToLetter(gameKeyColIdx);
+        const gkColNum = gameKeyColIdx + 1;
+        lines.push(`    SST_${safe}_SortKey = k`, `End Function`, ``, `Sub SST_Sort_${safe}(ws As Worksheet)`, `    Dim lastRow As Long`, `    lastRow = ws.Cells(ws.Rows.Count, "${gkLetter}").End(xlUp).Row`, `    If lastRow <= 1 Then Exit Sub`, `    Dim hCol As Long`, `    hCol = ws.UsedRange.Column + ws.UsedRange.Columns.Count`, `    Dim i As Long`, `    For i = 2 To lastRow`, `        If Trim(CStr(ws.Cells(i, ${gkColNum}).Value)) <> "" Then`, `            ws.Cells(i, hCol).Value = SST_${safe}_SortKey(CStr(ws.Cells(i, ${gkColNum}).Value))`, `        End If`, `    Next i`, `    ws.UsedRange.Sort Key1:=ws.Cells(1, hCol), Order1:=xlAscending, Header:=xlYes`, `    ws.Columns(hCol).Delete`, `End Sub`, ``);
       }
       lines.push(`' ${'─'.repeat(60)}`, `' 메인 진입점 — Excel VBA 에디터에서 이 함수를 실행하세요`, `' ${'─'.repeat(60)}`, ``, `Sub SortAllSheets()`, `    Application.ScreenUpdating = False`, `    Application.Calculation = xlCalculationManual`, `    Dim ws As Worksheet`, `    For Each ws In ThisWorkbook.Worksheets`, `        Select Case ws.Name`);
       configuredSheets.forEach(sheet => lines.push(`            Case "${sheet.name.replace(/"/g,'""')}": SST_Sort_${safeVBAName(sheet.name)} ws`));
@@ -1210,7 +1595,8 @@
 
     // ── RESET ──
     function reset() {
-      xlsxFile = null; parsedSheets = []; sheetConfigs = {}; selectedSheet = null; editLevels = [];
+      xlsxFile = null; parsedSheets = []; sheetConfigs = {}; heldSheets = new Set(); selectedSheet = null; editLevels = [];
+      gameKeyColIdx = 1;
       fileInput.value = ''; setStatus(''); clearLog();
       document.getElementById('app-screen').classList.remove('visible');
       updateExportPanel(); fileInput.click();
@@ -1234,6 +1620,16 @@
       }, duration);
     }
   </script>
+
+  <!-- ── COLUMN PICKER MODAL ── -->
+  <div id="col-picker-backdrop">
+    <div id="col-picker-modal">
+      <h2>게임키 열 선택</h2>
+      <p>정렬에 사용할 게임키가 있는 열을 선택해주세요.<br>선택한 열은 파일 내 모든 시트에 동일하게 적용됩니다.</p>
+      <div id="col-picker-cols"></div>
+      <button id="col-picker-confirm" disabled>확인</button>
+    </div>
+  </div>
 
   <div id="toast-container"></div>
 </body>
